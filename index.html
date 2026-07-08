@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title id="pageTitle">Index</title>
+<style>
+  :root {
+    --bg: #f7f7f8;
+    --card: #ffffff;
+    --border: #e5e5ea;
+    --text: #1d1d1f;
+    --muted: #86868b;
+    --accent: #ff4d6d;
+    --accent-soft: #ffe4ea;
+    --ok: #34c759;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.6;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 28px 18px 80px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 22px; }
+  details {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 16px; margin-bottom: 18px;
+  }
+  summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+  .grid { display: grid; gap: 10px; margin-top: 12px; }
+  label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  input, textarea, select {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 14px; font-family: inherit; background: #fff; color: var(--text);
+  }
+  textarea { resize: vertical; min-height: 70px; }
+  input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 16px;
+  }
+  .style-radios { display: flex; gap: 10px; flex-wrap: wrap; }
+  .style-radio {
+    flex: 1; min-width: 170px; display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px; border: 2px solid var(--border); border-radius: 10px;
+    background: #fff; cursor: pointer; transition: all .15s; user-select: none;
+    margin-bottom: 0; color: var(--text);
+  }
+  .style-radio:hover { border-color: #ffb3c1; }
+  .style-radio input {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    border: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
+    white-space: nowrap; opacity: 0;
+  }
+  .style-radio:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .style-radio .dot {
+    width: 18px; height: 18px; border-radius: 50%; border: 2px solid #c7c7cc;
+    flex-shrink: 0; position: relative; transition: all .15s;
+  }
+  .style-radio input:checked ~ .dot { border-color: var(--accent); }
+  .style-radio input:checked ~ .dot::after {
+    content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent);
+  }
+  .style-radio.checked { border-color: var(--accent); background: var(--accent-soft); }
+  .style-radio .meta { display: flex; flex-direction: column; }
+  .style-radio .name { font-weight: 700; font-size: 14px; color: var(--text); }
+  .style-radio .desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  .seg { display: flex; gap: 6px; }
+  .seg button {
+    flex: 1; padding: 9px; border: 1px solid var(--border); border-radius: 8px; background: #fff;
+    cursor: pointer; font-size: 13px;
+  }
+  .seg button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .btn-primary {
+    width: 100%; padding: 14px; border: none; border-radius: 10px;
+    background: var(--accent); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 4px;
+  }
+  .btn-primary:hover { filter: brightness(1.05); }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+  .results-head { display: flex; justify-content: space-between; align-items: center; margin: 8px 0 14px; }
+  .results-head h2 { font-size: 16px; margin: 0; }
+  .btn-ghost {
+    padding: 7px 14px; border: 1px solid var(--border); border-radius: 8px; background: #fff;
+    cursor: pointer; font-size: 13px;
+  }
+  .copy-card {
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px;
+    background: #fff; position: relative;
+  }
+  .copy-card .title { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+  .copy-card .qlines { font-size: 14px; }
+  .copy-card .qlines div { color: #444; }
+  .copy-card .qlines div::before { content: "› "; color: var(--accent); font-weight: 700; }
+  .copy-card .copy-btn {
+    position: absolute; top: 10px; right: 10px; font-size: 12px; padding: 4px 10px;
+    border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer;
+  }
+  .copy-card .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .status { text-align: center; color: var(--muted); font-size: 14px; padding: 30px; }
+  .error { color: var(--accent); text-align: center; padding: 20px; font-size: 14px; white-space: pre-wrap; }
+  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%; animation: sp .7s linear infinite; vertical-align: -2px; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  .auth-mask {
+    position: fixed; inset: 0; background: #f7f7f8;
+    display: flex; align-items: center; justify-content: center; z-index: 9999;
+  }
+  .auth-box {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 28px 24px; width: 280px; text-align: center;
+  }
+  .auth-title { font-size: 24px; margin-bottom: 16px; }
+  .auth-box input { margin-bottom: 12px; text-align: center; }
+  .auth-box button {
+    width: 100%; padding: 10px; border: none; border-radius: 8px;
+    background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .auth-err { color: var(--accent); font-size: 12px; margin-top: 10px; min-height: 16px; }
+</style>
+</head>
+<body>
+<div id="authMask" class="auth-mask">
+  <div class="auth-box">
+    <div class="auth-title">🔒</div>
+    <input id="authPwd" type="password" placeholder="请输入密码" autocomplete="off" />
+    <button id="authSubmit">进入</button>
+    <div id="authErr" class="auth-err"></div>
+  </div>
+</div>
+
+<div class="wrap" id="appWrap" style="display:none">
+  <h1>👁️ 美瞳种草文案生成器</h1>
+  <div class="sub">三风格切换 · 批量生成 · OpenAI 兼容接口（DeepSeek / 智谱 / 通义 / Moonshot / OpenAI 通用）</div>
+
+  <!-- 设置区 -->
+  <details id="settings">
+    <summary>⚙️ API 设置（首次使用需填写，自动保存）</summary>
+    <div class="grid">
+      <div>
+        <label>API Base URL</label>
+        <input id="baseUrl" placeholder="https://api.deepseek.com/v1" />
+        <div class="hint">填到 /v1 即可，末尾不要加 /chat/completions。例：DeepSeek <code>https://api.deepseek.com/v1</code>；OpenAI <code>https://api.openai.com/v1</code></div>
+      </div>
+      <div>
+        <label>API Key</label>
+        <input id="apiKey" type="password" placeholder="sk-..." />
+        <div class="hint">仅存在你本地浏览器（localStorage），不上传任何服务器。</div>
+      </div>
+      <div>
+        <label>模型名</label>
+        <input id="model" placeholder="deepseek-chat / gpt-4o-mini / glm-4-plus / qwen-plus ..." />
+        <div class="hint">⚠️ 浏览器直调需厂商支持跨域(CORS)。DeepSeek、OpenAI 支持；智谱/通义若报跨域错，需自建代理或换厂商。</div>
+      </div>
+    </div>
+  </details>
+
+  <!-- 风格选择 -->
+  <div class="card">
+    <label style="margin-bottom:10px">🎨 风格档（三选一，决定氛围 / 人设 / 色系 / emoji 配色）</label>
+    <div class="style-radios" id="styleRadios">
+      <label class="style-radio">
+        <input type="radio" name="style" value="ssorcon">
+        <span class="dot"></span>
+        <span class="meta">
+          <span class="name">ssorcon</span>
+          <span class="desc">阴湿·赛博·哥特·颓靡（蓝绿冷暗）</span>
+        </span>
+      </label>
+      <label class="style-radio">
+        <input type="radio" name="style" value="sakura_red">
+        <span class="dot"></span>
+        <span class="meta">
+          <span class="name">sakura_red</span>
+          <span class="desc">贵气·浓颜·泰系·老钱（金棕暖贵）</span>
+        </span>
+      </label>
+      <label class="style-radio">
+        <input type="radio" name="style" value="sakura_blue">
+        <span class="dot"></span>
+        <span class="meta">
+          <span class="name">sakura_blue</span>
+          <span class="desc">甜美·病娇·清冷·doll（粉棕紫甜丧）</span>
+        </span>
+      </label>
+    </div>
+  </div>
+
+  <!-- 输入区 -->
+  <div class="card">
+    <div class="grid">
+      <div>
+        <label>同款产品过往文案（可选 · 从中提取颜色/直径/价格等产品信息）</label>
+        <textarea id="pastCopies" rows="4" placeholder="粘贴【同一款式】上一篇的文案，生成器会读取其中的颜色、直径、价格、款式等真实产品信息（只继承产品信息，不照抄语气）…"></textarea>
+      </div>
+      <div>
+        <label>产品关键词（特征 / 颜色 / 直径 / 价格 / 促销钩子等）</label>
+        <textarea id="keywords" rows="4" placeholder="例：定轴 翡翠绿 14.5mm 半年抛 29r 清仓最后一批 深瞳显白"></textarea>
+      </div>
+      <div>
+        <label>生成数量</label>
+        <input id="count" type="number" min="1" max="10" value="5" />
+      </div>
+    </div>
+    <button class="btn-primary" id="genBtn">✨ 生成文案</button>
+  </div>
+
+  <!-- 输出区 -->
+  <div class="results-head" id="resultsHead" style="display:none">
+    <h2 id="resultsTitle">生成结果</h2>
+    <button class="btn-ghost" id="copyAllBtn">📋 复制全部</button>
+  </div>
+  <div id="results"></div>
+</div>
+
+<script src="styles/common.js"></script>
+<script src="styles/ssorcon.js"></script>
+<script src="styles/sakura_blue.js"></script>
+<script src="styles/sakura_red.js"></script>
+<script src="prompt.js"></script>
+<script src="auth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
