@@ -35,6 +35,7 @@
     width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
     font-size: 14px; font-family: inherit; background: #fff; color: var(--text);
   }
+  input[type="range"] { padding: 0; accent-color: var(--accent); cursor: pointer; height: 24px; }
   textarea { resize: vertical; min-height: 70px; }
   input:focus, textarea:focus { outline: none; border-color: var(--accent); }
   .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
@@ -201,9 +202,15 @@
         <label>产品关键词（特征 / 颜色 / 直径 / 价格 / 促销钩子等）</label>
         <textarea id="keywords" rows="4" placeholder="例：定轴 翡翠绿 14.5mm 半年抛 29r 清仓最后一批 深瞳显白"></textarea>
       </div>
-      <div>
-        <label>生成数量</label>
-        <input id="count" type="number" min="1" max="10" value="5" />
+      <div class="row">
+        <div>
+          <label>生成数量</label>
+          <input id="count" type="number" min="1" max="10" value="5" />
+        </div>
+        <div>
+          <label>多样性（temperature = <span id="tempVal">0.95</span>）</label>
+          <input id="temperature" type="range" min="0" max="1.5" step="0.05" value="0.95" />
+        </div>
       </div>
     </div>
     <button class="btn-primary" id="genBtn">✨ 生成文案</button>

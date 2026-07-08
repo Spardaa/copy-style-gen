@@ -48,12 +48,25 @@
     var saved = LS.get('style', 'ssorcon');
     state.style = VALID_STYLES.indexOf(saved) !== -1 ? saved : 'ssorcon';
     $('count').value = LS.get('count', '5');
+    var tempInput = $('temperature');
+    if (tempInput) {
+      tempInput.value = LS.get('temperature', '0.95');
+      var tv = $('tempVal'); if (tv) tv.textContent = tempInput.value;
+    }
   }
   // 设置项自动保存
   Array.prototype.forEach.call(['baseUrl', 'apiKey', 'model', 'count'], function (id) {
     var el = $(id);
     if (el) el.addEventListener('change', function () { LS.set(id, el.value); });
   });
+  // temperature 滑条：实时显示数值 + 保存
+  var tempInput = $('temperature');
+  if (tempInput) {
+    tempInput.addEventListener('input', function () {
+      var tv = $('tempVal'); if (tv) tv.textContent = tempInput.value;
+      LS.set('temperature', tempInput.value);
+    });
+  }
 
   // ---- 拼接请求 URL ----
   function buildUrl(baseUrl) {
@@ -176,7 +189,7 @@
         count: parseInt($('count').value, 10) || 5,
         intensity: 'mid'
       });
-      var raw = await callLLM(built.messages, built.temperature);
+      var raw = await callLLM(built.messages, parseFloat($('temperature').value) || 0.95);
       var copies = parseCopies(raw);
       renderResults(copies);
       window._lastCopies = copies;
