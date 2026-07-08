@@ -1,6 +1,6 @@
 // auth.js — 纯前端简易登录（仅挡外行，非真正鉴权；要真安全需后端）
-// 会话策略：sessionStorage（关闭浏览器即失效，每次重登，更安全）
-//   想改成"长期记住不重登"：把下方两处 sessionStorage 改成 localStorage
+// 会话策略：localStorage（长期记住登录态，登录一次后免重复登录）
+//   想改成"每次开浏览器都要重登（更安全）"：把下方两处 localStorage 改回 localStorage
 (function () {
   'use strict';
 
@@ -24,7 +24,7 @@
   }
 
   var authed = false;
-  try { authed = sessionStorage.getItem('auth_ok') === '1'; } catch (e) {}
+  try { authed = localStorage.getItem('auth_ok') === '1'; } catch (e) {}
 
   if (authed) { showApp(); return; }  // 本次会话已登录，直接进
   showMask();
@@ -38,7 +38,7 @@
     var b64 = '';
     try { b64 = btoa(val); } catch (e) {}
     if (b64 === PASSWORD_B64) {
-      try { sessionStorage.setItem('auth_ok', '1'); } catch (e) {}
+      try { localStorage.setItem('auth_ok', '1'); } catch (e) {}
       showApp();
     } else {
       if (err) err.textContent = '密码错误';
