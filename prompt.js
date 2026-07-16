@@ -16,6 +16,14 @@
     }).join('\n\n---\n\n');
   }
 
+  // 从自演化词库加权抽样子集；evolve.js 缺失/异常时回退到原全量数组（不影响生成）
+  function pick(catKey, fallbackArr, k) {
+    if (window.EVOLVE && typeof window.EVOLVE.sample === 'function') {
+      try { var r = window.EVOLVE.sample(catKey, k); if (r && r.length) return r; } catch (e) {}
+    }
+    return fallbackArr || [];
+  }
+
   function buildPrompt(opts) {
     opts = opts || {};
     var STYLES = window.STYLES || {};
@@ -36,48 +44,54 @@
     sys.push(COMMON.punctuationRule || '');
     sys.push('');
     sys.push('# 通用高频句式（三风格共用，自由穿插）');
-    sys.push(joinArr(COMMON.sharedFormulas));
-    sys.push('通用网感词：' + joinArr(COMMON.sharedVocab));
+    sys.push(joinArr(pick('common.sharedFormulas', COMMON.sharedFormulas, 10)));
+    sys.push('通用网感词：' + joinArr(pick('common.sharedVocab', COMMON.sharedVocab, 14)));
     sys.push('通用价格/促销钩子：' + joinArr(COMMON.sharedPriceHooks));
     sys.push('emoji 通则：' + (COMMON.emojiRule || ''));
-    sys.push('通用谐音卖萌：' + homophonesBlock(COMMON.homophones));
+    sys.push('通用谐音卖萌：' + homophonesBlock(pick('common.homophones', COMMON.homophones, 12)));
     sys.push('');
     sys.push('# 本次风格档：' + (s.label || styleKey));
     sys.push('氛围定位：' + (s.vibe || ''));
     sys.push('');
     sys.push('## 该风格偏好句式（叠加在通用句式之上，拉开本风格差异）');
-    sys.push(formulasBlock(s.formulas) || '（无）');
+    sys.push(formulasBlock(pick('style.' + styleKey + '.formulas', s.formulas, 8)) || '（无）');
     sys.push('');
     sys.push('## 标志性口头禅/梗');
-    sys.push(joinArr(s.signatures));
+    sys.push(joinArr(pick('style.' + styleKey + '.signatures', s.signatures, 8)));
     sys.push('');
     sys.push('## 词库（⚠️ 除标注"可自由发挥"的以外，其余【仅在用户明确提到时】才可用其风格化写法；用户没提的绝不主动写）');
-    sys.push('核心色系（⚠️用户没给颜色，绝不自行从词库挑选色名）：' + joinArr(s.palette));
-    sys.push('人设/氛围（✅可自由发挥）：' + joinArr(s.persona));
+    sys.push('核心色系/色感词库（✅仅可用【与用户给定产品色系相符】的色感词来丰富表达；用户没给颜色时，不得自定具体色名）：' + joinArr(pick('style.' + styleKey + '.palette', s.palette, 18)));
+    sys.push('人设/氛围（✅可自由发挥）：' + joinArr(pick('style.' + styleKey + '.persona', s.persona, 8)));
     sys.push('产品规格：定轴/直径/抛型/高光/着色/度数等（⚠️用户没提到的，一个都不许写）：' + joinArr(s.specs));
-    sys.push('夸张赞美（✅可自由发挥）：' + joinArr(s.praise));
+    sys.push('夸张赞美（✅可自由发挥）：' + joinArr(pick('style.' + styleKey + '.praise', s.praise, 10)));
     sys.push('价格/促销钩子（⚠️用户没给价格/促销的，绝不写）：' + joinArr(s.priceHooks));
-    sys.push('emoji 配色（✅可自由发挥，成簇贴色系）：' + joinArr(s.emojiCombos));
+    sys.push('emoji 配色（✅可自由发挥，成簇贴色系）：' + joinArr(pick('style.' + styleKey + '.emojiCombos', s.emojiCombos, 10)));
     sys.push('');
     sys.push('## 标题参考模板（体会节奏与情绪，不要逐字套用）');
-    sys.push(joinArr(s.titlePatterns));
+    sys.push(joinArr(pick('style.' + styleKey + '.titlePatterns', s.titlePatterns, 8)));
     sys.push('');
     sys.push('# 该风格真实样例（仅作风格示范；严禁照抄样例里的具体产品名/价格/角色名/品牌名）');
-    // 每次从风格样例池随机洗牌抽 6 条（Fisher-Yates），让每次模仿对象不同，避免千篇一律
-    var shotPool = (s.fewShots || []).slice();
-    for (var si = shotPool.length - 1; si > 0; si--) {
-      var sj = Math.floor(Math.random() * (si + 1));
-      var sTmp = shotPool[si]; shotPool[si] = shotPool[sj]; shotPool[sj] = sTmp;
+    // 优先走自演化词库的加权抽样（带 recency 防重复）；evolve.js 缺失时回退 Fisher-Yates 随机 6 条
+    var shotSample = null;
+    if (window.EVOLVE && typeof window.EVOLVE.sample === 'function') {
+      try { shotSample = window.EVOLVE.sample('style.' + styleKey + '.fewShots', 6); } catch (e) { shotSample = null; }
     }
-    var shotSample = shotPool.slice(0, Math.min(6, shotPool.length));
+    if (!shotSample || !shotSample.length) {
+      var shotPool = (s.fewShots || []).slice();
+      for (var si = shotPool.length - 1; si > 0; si--) {
+        var sj = Math.floor(Math.random() * (si + 1));
+        var sTmp = shotPool[si]; shotPool[si] = shotPool[sj]; shotPool[sj] = sTmp;
+      }
+      shotSample = shotPool.slice(0, Math.min(6, shotPool.length));
+    }
     sys.push(fewShotsBlock(shotSample) || '（无）');
     sys.push('');
     sys.push('# 禁忌（重要）');
     sys.push('- 严禁输出具体的二次元角色名（林克/雏田/小舞/知更鸟/温迪等）、品牌或系列专有名（piggyoo/Jumicon/Isoralook 等）、仅出现过一次的生僻色名——这些只是风格方向参考，除非用户关键词明确给出，否则不要写进文案。');
     sys.push('- 严禁照抄样例；' + n + ' 条之间标题、角度、卖点必须互不相同。');
-    sys.push('- 【产品参数红线·最高优先级·违反即失败】文案里出现的任何【产品事实参数】都必须 100% 来自用户的关键词或过往文案，【用户没提到的，一个都不许自动生成/编造】。包括但不限于：① 色系名（翡翠绿/克莱因蓝…）② 直径（14.5mm）③ 价格（29r）④ 款式（定轴/非定轴）⑤ 高光（定位高光/不乱转）⑥ 抛型（半年抛/日抛）⑦ 着色 ⑧ 度数 ⑨ 任何可验证规格。宁可文案只剩氛围/情绪/赞美（阴湿/颓靡/显白/混血感/网感句式/emoji），也绝不杜撰。【看到风格词库或样例里出现这些参数 ≠ 你可以用——除非用户明确给了】。');
+    sys.push('- 【产品参数红线·最高优先级·违反即失败】文案里出现的任何【产品事实参数】都必须 100% 来自用户的关键词或过往文案，【用户没提到的，一个都不许自动生成/编造】。包括但不限于：① 产品真实色名/色号（必须与用户给定的产品色系一致；风格色盘里的色感词仅在【与用户给定色系相符】时可用于丰富表达，用户没给颜色时不得自定具体色名）② 直径（14.5mm）③ 价格（29r）④ 款式（定轴/非定轴）⑤ 高光（定位高光/不乱转）⑥ 抛型（半年抛/日抛）⑦ 着色 ⑧ 度数 ⑨ 任何可验证规格。宁可文案只剩氛围/情绪/赞美（阴湿/颓靡/显白/混血感/网感句式/emoji），也绝不杜撰。【样例里出现的具体产品参数 ≠ 你可以用；风格色盘的色感词仅在【与用户给定色系相符】时可用】。');
     sys.push('- 卖点要落到产品的【实际特征】（来自用户输入），不要只空喊赞美；但绝不为"落到产品"而编造用户没给的参数。');
-    sys.push('- 该风格独有句式 + 人设/氛围/emoji 配色是拉开差异的关键，请主动用上；但【色系名只能用用户给定的】，不要从风格词库自行挑选色名。');
+    sys.push('- 该风格独有句式 + 人设/氛围/emoji 配色是拉开差异的关键，请主动用上；但【色系名必须与用户给定的产品色系相符】——风格色盘里的色感词只在【与用户色系一致】时用于丰富表达，用户没给颜色时不要自定具体色名。');
     sys.push('');
     sys.push('# 输出契约');
     sys.push(COMMON.outputContract || ('直接以 # 开头输出 ' + n + ' 条，每条 = 1 行 # 标题 + 3~5 行 > 引用，条间用单独一行 --- 分隔，无前言/编号/代码块标记。'));
@@ -103,8 +117,7 @@
       messages: [
         { role: 'system', content: sys.join('\n') },
         { role: 'user', content: user.join('\n') }
-      ],
-      temperature: 0.95
+      ]
     };
   }
 

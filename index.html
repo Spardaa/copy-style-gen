@@ -102,6 +102,12 @@
     border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer;
   }
   .copy-card .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .copy-card .ban-btn {
+    position: absolute; top: 10px; right: 62px; font-size: 12px; padding: 4px 8px;
+    border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer; line-height: 1;
+  }
+  .copy-card .ban-btn:hover { border-color: var(--accent); }
+  .copy-card .ban-btn:disabled { opacity: .5; cursor: default; }
   .status { text-align: center; color: var(--muted); font-size: 14px; padding: 30px; }
   .error { color: var(--accent); text-align: center; padding: 20px; font-size: 14px; white-space: pre-wrap; }
   .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
@@ -122,6 +128,26 @@
     background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
   }
   .auth-err { color: var(--accent); font-size: 12px; margin-top: 10px; min-height: 16px; }
+  /* 词库状态面板 */
+  .lib-toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:12px 0; }
+  .lib-stat { font-size:12px; color:var(--muted); background:#f0f0f2; padding:3px 8px; border-radius:6px; }
+  .lib-filter { display:flex; gap:10px; align-items:center; margin-bottom:8px; flex-wrap:wrap; }
+  .lib-filter select { width:auto; padding:5px 8px; font-size:12px; }
+  .lib-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .lib-table th { text-align:left; font-size:11px; color:var(--muted); padding:4px 6px; border-bottom:1px solid var(--border); }
+  .lib-table td { padding:5px 6px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  .lib-word { max-width:340px; word-break:break-all; }
+  .lib-empty { color:var(--muted); font-size:12px; }
+  .lib-del, .lib-unban { font-size:11px; padding:2px 8px; border:1px solid var(--border); border-radius:5px; background:#fff; cursor:pointer; }
+  .lib-del:hover, .lib-unban:hover { border-color:var(--accent); color:var(--accent); }
+  .tier { font-size:11px; padding:1px 7px; border-radius:10px; white-space:nowrap; }
+  .tier-seed { background:#eee; color:#666; }
+  .tier-active { background:#e6f7ec; color:#2a9d4a; }
+  .tier-cand { background:#fff3e0; color:#e08a00; }
+  .tier-ban { background:#ffe4ea; color:var(--accent); }
+  .lib-blacklist { margin-top:14px; }
+  .lib-ban-title { font-size:13px; font-weight:600; margin-bottom:6px; }
+  .lib-ban-item { display:inline-block; font-size:12px; background:#f7f7f8; border:1px solid var(--border); border-radius:6px; padding:2px 6px; margin:0 6px 6px 0; }
 </style>
 </head>
 <body>
@@ -222,12 +248,36 @@
     <button class="btn-ghost" id="copyAllBtn">📋 复制全部</button>
   </div>
   <div id="results"></div>
+
+  <!-- 词库状态面板（自演化调试/管理） -->
+  <details id="libPanel" style="margin-top:8px">
+    <summary>🧬 词库状态（自演化 · 点击展开查看权重/候选/黑名单）</summary>
+    <div class="lib-toolbar">
+      <span class="lib-stat" id="libEpoch">—</span>
+      <span class="lib-stat" id="libTotal">—</span>
+      <span class="lib-stat" id="libCand">—</span>
+      <span class="lib-stat" id="libBan">—</span>
+      <button class="btn-ghost" id="libRefresh" type="button">🔄 刷新</button>
+      <button class="btn-ghost" id="libReset" type="button">♻️ 重置词库</button>
+    </div>
+    <div class="lib-filter">
+      <label style="margin:0">选择类别</label>
+      <select id="libCat"></select>
+      <label style="margin:0"><input type="checkbox" id="libOnlyCand"> 只看 AI 新增/候选</label>
+    </div>
+    <div id="libTable"></div>
+    <div class="lib-blacklist">
+      <div class="lib-ban-title">🚫 黑名单（<span id="libBanCount">0</span>） · 拉黑的词句永不参与抽样</div>
+      <div id="libBanList"></div>
+    </div>
+  </details>
 </div>
 
 <script src="styles/common.js"></script>
 <script src="styles/ssorcon.js"></script>
 <script src="styles/sakura_blue.js"></script>
 <script src="styles/sakura_red.js"></script>
+<script src="evolve.js"></script>
 <script src="prompt.js"></script>
 <script src="auth.js"></script>
 <script src="app.js"></script>
