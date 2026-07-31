@@ -12,6 +12,8 @@
   }
   var buildPrompt = window.PromptEngine.buildPrompt;
   var parseCopies = window.PromptEngine.parseCopies;
+  var validateCopies = window.PromptEngine.validateCopies;
+  var buildRepairMessages = window.PromptEngine.buildRepairMessages;
   var VALID_STYLES = Object.keys(window.PromptEngine.STYLES);
 
   var $ = function (id) { return document.getElementById(id); };
@@ -22,6 +24,22 @@
 
   // intensity 已从 UI 移除，固定为标准档
   var state = { style: 'ssorcon' };
+
+  function readCount() {
+    var el = $('count');
+    var n = parseInt(el && el.value, 10);
+    if (!isFinite(n)) n = 5;
+    n = Math.max(1, Math.min(10, n));
+    if (el) el.value = String(n);
+    return n;
+  }
+
+  function readTemperature() {
+    var el = $('temperature');
+    var n = parseFloat(el && el.value);
+    if (!isFinite(n)) n = 0.95;
+    return Math.max(0, Math.min(1.5, n));
+  }
 
   // ---- 风格选择 ----
   function initStyleRadios() {
@@ -114,8 +132,8 @@
     return text;
   }
   // 生成流程专用：按生成数量推导 max_tokens
-  async function callLLM(messages, temperature) {
-    var count = parseInt($('count').value, 10) || 5;
+  async function callLLM(messages, temperature, requestedCount) {
+    var count = requestedCount || readCount();
     var maxTokens = Math.min(8000, count * 600 + 200);
     return callLLMCore(messages, temperature, maxTokens);
   }
@@ -145,7 +163,7 @@
       card.className = 'copy-card';
       var linesHtml = c.lines.map(function (l) { return '<div>' + escapeHtml(l) + '</div>'; }).join('');
       card.innerHTML = '<button class="copy-btn" data-i="' + i + '">复制</button>' +
-        '<button class="ban-btn" data-i="' + i + '" title="拉黑这条用到的词句，后续不再出现">👎</button>' +
+        '<button class="ban-btn" data-i="' + i + '" title="降低这条文案所用词句的后续推荐权重；累计两次才拉黑">👎</button>' +
         '<div class="title">' + escapeHtml(c.title) + '</div>' +
         '<div class="qlines">' + linesHtml + '</div>';
       box.appendChild(card);
@@ -160,7 +178,7 @@
           try { window.EVOLVE.banCard(toText(c)); } catch (e) {}
         }
         var lp = $('libPanel'); if (lp && lp.open) { try { renderLibPanel(); } catch (e) {} }
-        btn.textContent = '已拉黑';
+        btn.textContent = '已降权';
         btn.disabled = true;
       };
     });
@@ -299,19 +317,34 @@
     box.innerHTML = '<div class="status"><span class="spin"></span> 正在生成，请稍候…</div>';
     $('resultsHead').style.display = 'none';
     try {
+      var count = readCount();
+      var temperature = readTemperature();
       if (window.EVOLVE && window.EVOLVE.bumpEpoch) { try { window.EVOLVE.bumpEpoch(); } catch (e) {} }
       var built = buildPrompt({
         style: state.style,
         pastCopies: $('pastCopies').value,
         keywords: $('keywords').value,
-        count: parseInt($('count').value, 10) || 5,
+        count: count,
         intensity: 'mid'
       });
       // 异步扩库：在生成期间并发跑（用户此时一定在页面等待结果，复制后离开也不会打断扩库）；60s 节流
       if (window.EVOLVE && window.EVOLVE.expand) { try { window.EVOLVE.expand(state.style); } catch (e) {} }
-      var raw = await callLLM(built.messages, parseFloat($('temperature').value) || 0.95);
+      var raw = await callLLM(built.messages, temperature, count);
       var copies = parseCopies(raw);
+      var issues = validateCopies ? validateCopies(copies, built.facts, count) : [];
+      if (issues.length && buildRepairMessages) {
+        box.innerHTML = '<div class="status"><span class="spin"></span> 正在自动检查并修正文案…</div>';
+        var repairMessages = buildRepairMessages(built.messages, raw, issues, count);
+        raw = await callLLM(repairMessages, Math.min(temperature, 0.8), count);
+        copies = parseCopies(raw);
+        issues = validateCopies ? validateCopies(copies, built.facts, count) : [];
+      }
+      var safetyIssues = issues.filter(function (x) { return x.indexOf('未授权') !== -1 || x.indexOf('占位符') !== -1; });
+      if (safetyIssues.length) {
+        throw new Error('模型输出仍包含未授权产品参数，已阻止展示以避免误用。\n' + safetyIssues.join('\n'));
+      }
       renderResults(copies);
+      if (issues.length) $('resultsTitle').textContent += ' · 格式有轻微偏差';
       window._lastCopies = copies;
     } catch (e) {
       box.innerHTML = '<div class="error">❌ ' + escapeHtml(e && e.message ? e.message : String(e)) + '</div>';
@@ -344,6 +377,8 @@
     var libOnlyCand = $('libOnlyCand');
     if (libOnlyCand) libOnlyCand.onchange = function () { try { renderLibPanel(); } catch (e) {} };
     try { loadSettings(); } catch (e) { console.error('[app.js] loadSettings 失败：', e); }
+    var countInput = $('count');
+    if (countInput) countInput.addEventListener('change', readCount);
     try { initStyleRadios(); } catch (e) { console.error('[app.js] initStyleRadios 失败：', e); }
   }
   bindAndInit();
