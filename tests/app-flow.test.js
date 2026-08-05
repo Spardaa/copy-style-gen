@@ -63,8 +63,8 @@ async function run() {
     STYLES: { ssorcon: {} },
     buildPrompt: function () { return { messages: [], facts: {}, count: 1 }; },
     parseCopies: function () { return [{ title: '标题', lines: ['一', '二', '三'] }]; },
-    validateCopies: function () { return []; },
-    classifyIssues: function () { return { format: [], safety: [], quality: [] }; },
+    validateCopies: function () { return ['第 1 条出现未授权价格：29r']; },
+    classifyIssues: function () { return { format: [], safety: ['第 1 条出现未授权价格：29r'], quality: [] }; },
     buildFormatRepairMessages: function () { return []; }
   };
   context.EVOLVE = {
@@ -79,6 +79,7 @@ async function run() {
 
   assert.ok(events.indexOf('main-request') !== -1);
   assert.ok(events.indexOf('render') !== -1);
+  assert.ok(ids.results.innerHTML.indexOf('已阻止展示') === -1, '参数提示不应再阻止结果展示');
   assert.ok(events.indexOf('expand') !== -1);
   assert.ok(events.indexOf('render') < events.indexOf('expand'), '扩库必须在结果渲染之后启动');
   console.log('app flow tests passed');

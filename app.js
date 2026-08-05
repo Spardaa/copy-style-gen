@@ -346,10 +346,6 @@
         issues = validateCopies ? validateCopies(copies, built.facts, count) : [];
         issueGroups = classifyIssues ? classifyIssues(issues) : { format: issues, safety: [], quality: [] };
       }
-      var safetyIssues = issueGroups.safety || [];
-      if (safetyIssues.length) {
-        throw new Error('模型输出仍包含未授权产品参数，已阻止展示以避免误用。\n' + safetyIssues.join('\n'));
-      }
       renderResults(copies);
       if (issues.length) $('resultsTitle').textContent += ' · 质量检查有提示';
       window._lastCopies = copies;
