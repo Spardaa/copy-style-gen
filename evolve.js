@@ -278,7 +278,7 @@
     return false;
   }
 
-  // ---- 异步扩库（复制后自动触发，节流；仅红线安全类别）----
+  // ---- 异步扩库（主结果渲染后触发，节流；仅红线安全类别）----
   var EXPAND_STYLE_FIELDS = ['formulas', 'signatures', 'titlePatterns', 'praise', 'persona', 'emojiCombos', 'palette'];
   function buildExpandPrompt(field, shape, anchors) {
     var isFormula = shape === 'tplex';

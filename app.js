@@ -13,7 +13,8 @@
   var buildPrompt = window.PromptEngine.buildPrompt;
   var parseCopies = window.PromptEngine.parseCopies;
   var validateCopies = window.PromptEngine.validateCopies;
-  var buildRepairMessages = window.PromptEngine.buildRepairMessages;
+  var classifyIssues = window.PromptEngine.classifyIssues;
+  var buildFormatRepairMessages = window.PromptEngine.buildFormatRepairMessages;
   var VALID_STYLES = Object.keys(window.PromptEngine.STYLES);
 
   var $ = function (id) { return document.getElementById(id); };
@@ -136,6 +137,12 @@
     var count = requestedCount || readCount();
     var maxTokens = Math.min(8000, count * 600 + 200);
     return callLLMCore(messages, temperature, maxTokens);
+  }
+  // 格式修复只做结构整理：短提示词、低温度、较小输出预算，避免再次跑完整创作链路
+  async function callFormatRepair(messages, requestedCount) {
+    var count = requestedCount || readCount();
+    var maxTokens = Math.min(5000, count * 450 + 200);
+    return callLLMCore(messages, 0, maxTokens);
   }
   // 暴露给 evolve.js 做异步扩库（显式 max_tokens，默认 800）
   window.callLLM = function (messages, temperature, maxTokens) {
@@ -327,25 +334,30 @@
         count: count,
         intensity: 'mid'
       });
-      // 异步扩库：在生成期间并发跑（用户此时一定在页面等待结果，复制后离开也不会打断扩库）；60s 节流
-      if (window.EVOLVE && window.EVOLVE.expand) { try { window.EVOLVE.expand(state.style); } catch (e) {} }
       var raw = await callLLM(built.messages, temperature, count);
       var copies = parseCopies(raw);
       var issues = validateCopies ? validateCopies(copies, built.facts, count) : [];
-      if (issues.length && buildRepairMessages) {
-        box.innerHTML = '<div class="status"><span class="spin"></span> 正在自动检查并修正文案…</div>';
-        var repairMessages = buildRepairMessages(built.messages, raw, issues, count);
-        raw = await callLLM(repairMessages, Math.min(temperature, 0.8), count);
+      var issueGroups = classifyIssues ? classifyIssues(issues) : { format: issues, safety: [], quality: [] };
+      if (issueGroups.format.length && buildFormatRepairMessages) {
+        box.innerHTML = '<div class="status"><span class="spin"></span> 文案已生成，正在整理输出格式…</div>';
+        var repairMessages = buildFormatRepairMessages(raw, issueGroups.format, count);
+        raw = await callFormatRepair(repairMessages, count);
         copies = parseCopies(raw);
         issues = validateCopies ? validateCopies(copies, built.facts, count) : [];
+        issueGroups = classifyIssues ? classifyIssues(issues) : { format: issues, safety: [], quality: [] };
       }
-      var safetyIssues = issues.filter(function (x) { return x.indexOf('未授权') !== -1 || x.indexOf('占位符') !== -1; });
+      var safetyIssues = issueGroups.safety || [];
       if (safetyIssues.length) {
         throw new Error('模型输出仍包含未授权产品参数，已阻止展示以避免误用。\n' + safetyIssues.join('\n'));
       }
       renderResults(copies);
-      if (issues.length) $('resultsTitle').textContent += ' · 格式有轻微偏差';
+      if (issues.length) $('resultsTitle').textContent += ' · 质量检查有提示';
       window._lastCopies = copies;
+      // 先让结果完成渲染，再异步扩库；不占用主生成与格式修复阶段的模型并发
+      var styleForExpand = state.style;
+      setTimeout(function () {
+        if (window.EVOLVE && window.EVOLVE.expand) { try { window.EVOLVE.expand(styleForExpand); } catch (e) {} }
+      }, 0);
     } catch (e) {
       box.innerHTML = '<div class="error">❌ ' + escapeHtml(e && e.message ? e.message : String(e)) + '</div>';
     } finally {

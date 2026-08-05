@@ -344,17 +344,42 @@
     return issues;
   }
 
-  function buildRepairMessages(originalMessages, raw, issues, expectedCount) {
-    var messages = (originalMessages || []).slice();
-    messages.push({ role: 'assistant', content: String(raw || '') });
-    messages.push({ role: 'user', content: [
-      '上面的草稿未通过自动质量检查，请直接重写整份结果。',
-      '发现的问题：',
-      (issues || []).map(function (x) { return '- ' + x; }).join('\n'),
-      '必须保持原任务的风格和产品事实白名单，恰好输出 ' + expectedCount + ' 条。',
-      '只输出修正后的最终文案，第一个字符必须是 #。'
-    ].join('\n') });
-    return messages;
+  function classifyIssues(issues) {
+    var out = { format: [], safety: [], quality: [] };
+    (issues || []).forEach(function (issue) {
+      if (/应输出|缺少标题|正文必须为/.test(issue)) out.format.push(issue);
+      else if (/未授权|占位符/.test(issue)) out.safety.push(issue);
+      else out.quality.push(issue);
+    });
+    return out;
+  }
+
+  // 格式修复使用独立的短提示词，不重复发送完整风格库，也不允许改写或补充产品事实。
+  function buildFormatRepairMessages(raw, issues, expectedCount) {
+    return [
+      {
+        role: 'system',
+        content: [
+          '你是纯文本格式整理器，不是文案写手。',
+          '只整理现有内容的 Markdown 结构，禁止润色、改写、补充、删除产品事实，禁止新增价格、颜色、参数、促销或卖点。',
+          '目标格式：恰好 ' + expectedCount + ' 条；每条一行「# 标题」和3～5行「> 正文」；条间用单独一行「---」分隔。',
+          '可以把错误合并的正文拆行，或把同一条内过多的短行合并，但必须保持原意和原有事实不变。',
+          '无前言、编号、解释或代码块；第一个字符必须是 #。'
+        ].join('\n')
+      },
+      {
+        role: 'user',
+        content: [
+          '自动检查发现的格式问题：',
+          (issues || []).map(function (x) { return '- ' + x; }).join('\n'),
+          '',
+          '请只修复下面文本的格式：',
+          '<draft>',
+          String(raw || ''),
+          '</draft>'
+        ].join('\n')
+      }
+    ];
   }
 
   window.PromptEngine = {
@@ -362,7 +387,8 @@
     parseCopies: parseCopies,
     extractProductFacts: extractProductFacts,
     validateCopies: validateCopies,
-    buildRepairMessages: buildRepairMessages,
+    classifyIssues: classifyIssues,
+    buildFormatRepairMessages: buildFormatRepairMessages,
     STYLES: window.STYLES,
     COMMON: window.COMMON
   };

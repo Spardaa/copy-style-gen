@@ -51,4 +51,24 @@ var authorized = engine.validateCopies([
 ], facts, 1);
 assert.deepStrictEqual(Array.prototype.slice.call(authorized), []);
 
+var grouped = engine.classifyIssues([
+  '应输出 5 条，实际解析到 4 条',
+  '第 1 条正文必须为 3～5 行',
+  '第 2 条出现未授权价格：29r',
+  '第 3 条与第 1 条标题重复'
+]);
+assert.strictEqual(grouped.format.length, 2);
+assert.strictEqual(grouped.safety.length, 1);
+assert.strictEqual(grouped.quality.length, 1);
+
+var formatMessages = engine.buildFormatRepairMessages(
+  '# 标题\n正文一\n正文二\n正文三',
+  grouped.format,
+  1
+);
+assert.strictEqual(formatMessages.length, 2, '格式修复应使用独立短提示词');
+assert.ok(formatMessages[0].content.indexOf('纯文本格式整理器') !== -1);
+assert.ok(formatMessages[0].content.indexOf('禁止润色、改写') !== -1);
+assert.ok(formatMessages[1].content.indexOf('<draft>') !== -1);
+
 console.log('prompt tests passed');
