@@ -454,6 +454,24 @@
     ];
   }
 
+  // 空响应恢复必须重新执行原任务；没有草稿可整理，因此保留原上下文并追加一条强约束指令。
+  function buildEmptyRecoveryMessages(originalMessages, expectedCount, diagnostic) {
+    var messages = (originalMessages || []).map(function (message) {
+      return { role: message.role, content: message.content };
+    });
+    var finishReason = diagnostic && diagnostic.finishReason ? diagnostic.finishReason : '未提供';
+    messages.push({
+      role: 'user',
+      content: [
+        '【空响应恢复审查】上一次调用没有返回可见正文（finish_reason：' + finishReason + '）。',
+        '请重新检查并完整执行上面的原始文案任务，不要解释空响应原因。',
+        '必须直接输出恰好 ' + expectedCount + ' 条最终 Markdown 文案：每条以「# 标题」开始，正文每行以「> 」开始，条目之间用单独一行「---」分隔。',
+        '不要输出前言、分析、拒绝说明、代码块或任何格式外文字；第一个字符必须是 #。'
+      ].join('\n')
+    });
+    return messages;
+  }
+
   window.PromptEngine = {
     buildPrompt: buildPrompt,
     parseCopies: parseCopies,
@@ -461,6 +479,7 @@
     validateCopies: validateCopies,
     classifyIssues: classifyIssues,
     buildFormatRepairMessages: buildFormatRepairMessages,
+    buildEmptyRecoveryMessages: buildEmptyRecoveryMessages,
     STYLES: window.STYLES,
     COMMON: window.COMMON
   };

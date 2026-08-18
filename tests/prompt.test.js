@@ -113,4 +113,14 @@ assert.ok(formatMessages[0].content.indexOf('纯文本格式整理器') !== -1);
 assert.ok(formatMessages[0].content.indexOf('禁止润色、改写') !== -1);
 assert.ok(formatMessages[1].content.indexOf('<draft>') !== -1);
 
+var recoveryMessages = engine.buildEmptyRecoveryMessages(
+  [{ role: 'system', content: '原系统提示' }, { role: 'user', content: '原任务' }],
+  3,
+  { finishReason: 'stop' }
+);
+assert.strictEqual(recoveryMessages.length, 3, '空响应恢复应保留原任务并追加审查指令');
+assert.strictEqual(recoveryMessages[0].content, '原系统提示');
+assert.ok(recoveryMessages[2].content.indexOf('恰好 3 条') !== -1);
+assert.ok(recoveryMessages[2].content.indexOf('第一个字符必须是 #') !== -1);
+
 console.log('prompt tests passed');

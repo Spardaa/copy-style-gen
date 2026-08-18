@@ -15,6 +15,7 @@
   var validateCopies = window.PromptEngine.validateCopies;
   var classifyIssues = window.PromptEngine.classifyIssues;
   var buildFormatRepairMessages = window.PromptEngine.buildFormatRepairMessages;
+  var buildEmptyRecoveryMessages = window.PromptEngine.buildEmptyRecoveryMessages;
   var VALID_STYLES = Object.keys(window.PromptEngine.STYLES);
 
   var $ = function (id) { return document.getElementById(id); };
@@ -97,6 +98,83 @@
   }
 
   // ---- 调用 LLM ----
+  function textFromContent(content) {
+    if (typeof content === 'string') return content;
+    if (!Array.isArray(content)) return '';
+    return content.map(function (part) {
+      if (typeof part === 'string') return part;
+      if (!part || typeof part !== 'object') return '';
+      if (typeof part.text === 'string') return part.text;
+      if (typeof part.content === 'string') return part.content;
+      return '';
+    }).join('');
+  }
+
+  // OpenAI 兼容厂商的正文位置并不完全一致，兼容常见的字符串、内容数组和旧式 text。
+  function extractResponseText(data) {
+    var choice = data && data.choices && data.choices[0];
+    var message = choice && choice.message;
+    var text = textFromContent(message && message.content);
+    if (!text && choice && typeof choice.text === 'string') text = choice.text;
+    if (!text && data && typeof data.output_text === 'string') text = data.output_text;
+    if (!text && data && Array.isArray(data.output)) {
+      text = data.output.map(function (item) {
+        return textFromContent(item && item.content);
+      }).join('');
+    }
+    return typeof text === 'string' ? text.trim() : '';
+  }
+
+  function emptyResponseDiagnostic(data) {
+    var choice = data && data.choices && data.choices[0];
+    var message = choice && choice.message;
+    var reasoning = message && (message.reasoning_content || message.reasoning);
+    return {
+      finishReason: choice && choice.finish_reason ? String(choice.finish_reason) : '',
+      hasChoices: !!(data && data.choices && data.choices.length),
+      hasReasoning: !!(reasoning && String(reasoning).trim()),
+      hasToolCalls: !!(message && message.tool_calls && message.tool_calls.length),
+      responseKeys: data && typeof data === 'object' ? Object.keys(data).slice(0, 8) : []
+    };
+  }
+
+  function makeEmptyResponseError(data) {
+    var diagnostic = emptyResponseDiagnostic(data);
+    var reason = diagnostic.finishReason ? 'finish_reason=' + diagnostic.finishReason : '接口未提供 finish_reason';
+    var err = new Error('模型返回为空（' + reason + '）');
+    err.code = 'EMPTY_LLM_RESPONSE';
+    err.diagnostic = diagnostic;
+    return err;
+  }
+
+  function emptyFailureAdvice(firstError, retryError) {
+    var a = firstError && firstError.diagnostic ? firstError.diagnostic : {};
+    var b = retryError && retryError.diagnostic ? retryError.diagnostic : {};
+    var finish = b.finishReason || a.finishReason || '';
+    var reason;
+    var advice;
+    if (finish === 'content_filter') {
+      reason = '接口的内容安全过滤拦截了可见正文。';
+      advice = '删减可能触发过滤的过往文案或关键词，或改用允许该营销场景的模型。';
+    } else if (finish === 'length') {
+      reason = '模型在输出最终正文前已达到长度上限。';
+      advice = '减少生成条数、缩短过往文案，或换用上下文/输出额度更大的模型。';
+    } else if (b.hasToolCalls || a.hasToolCalls) {
+      reason = '模型返回了工具调用，而不是普通文本正文。';
+      advice = '改用普通聊天模型，并确认接口未强制启用工具调用。';
+    } else if (b.hasReasoning || a.hasReasoning) {
+      reason = '接口只返回了推理内容，没有返回最终可见正文。';
+      advice = '改用非推理型聊天模型，或提高该模型的输出额度后重试。';
+    } else if (!b.hasChoices || !a.hasChoices) {
+      reason = '接口响应缺少 OpenAI 兼容的 choices 正文结构。';
+      advice = '检查 Base URL 是否为 /chat/completions、模型名是否正确，并确认服务商兼容 Chat Completions。';
+    } else {
+      reason = '接口连续两次返回了成功响应，但都没有可见文本。';
+      advice = '先重试；若持续出现，请更换模型，并检查服务商额度、内容过滤记录与接口日志。';
+    }
+    return '模型连续两次返回为空，自动恢复未成功。\n\n错误原因：' + reason + '\n修改建议：' + advice;
+  }
+
   // 核心：接收显式 max_tokens，供生成流程与 evolve.js 扩库复用同一套 buildUrl/auth/超时
   async function callLLMCore(messages, temperature, maxTokens) {
     var apiKey = $('apiKey').value.trim();
@@ -128,8 +206,8 @@
       throw new Error('HTTP ' + resp.status + ' ' + resp.statusText + '\n' + detail);
     }
     var data = await resp.json();
-    var text = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
-    if (!text) throw new Error('模型返回为空：' + JSON.stringify(data).slice(0, 300));
+    var text = extractResponseText(data);
+    if (!text) throw makeEmptyResponseError(data);
     return text;
   }
   // 生成流程专用：按生成数量推导 max_tokens
@@ -334,7 +412,22 @@
         count: count,
         intensity: 'mid'
       });
-      var raw = await callLLM(built.messages, temperature, count);
+      var raw;
+      try {
+        raw = await callLLM(built.messages, temperature, count);
+      } catch (firstError) {
+        if (!firstError || firstError.code !== 'EMPTY_LLM_RESPONSE' || !buildEmptyRecoveryMessages) throw firstError;
+        box.innerHTML = '<div class="status"><span class="spin"></span> 首次未收到正文，正在进行一次恢复审查…</div>';
+        var recoveryMessages = buildEmptyRecoveryMessages(built.messages, count, firstError.diagnostic);
+        try {
+          raw = await callLLM(recoveryMessages, Math.min(temperature, 0.4), count);
+        } catch (retryError) {
+          if (retryError && retryError.code === 'EMPTY_LLM_RESPONSE') {
+            throw new Error(emptyFailureAdvice(firstError, retryError));
+          }
+          throw retryError;
+        }
+      }
       var copies = parseCopies(raw);
       var issues = validateCopies ? validateCopies(copies, built.facts, count) : [];
       var issueGroups = classifyIssues ? classifyIssues(issues) : { format: issues, safety: [], quality: [] };
