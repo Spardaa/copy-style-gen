@@ -77,17 +77,18 @@
   }
 
   function factsBlock(facts) {
-    function row(label, arr) { return label + '：' + (arr.length ? arr.join('、') : '【未提供，禁止提及】'); }
-    return [
-      row('价格', facts.prices),
-      row('直径', facts.diameters),
-      row('抛型', facts.cycles),
-      row('定轴/高光稳定', facts.axis),
-      row('度数', facts.degrees),
-      row('促销/库存状态', facts.promotions),
-      row('效果/拍摄声明', facts.claims),
-      '颜色/色号：' + (facts.hasColor ? '用户原始材料中有颜色描述，只能沿用原文明确出现的叫法和同色系氛围表达' : '【未提供，禁止自定具体颜色或色号】')
-    ].join('\n');
+    var lines = [];
+    function add(label, arr) { if (arr && arr.length) lines.push(label + '：' + arr.join('、')); }
+    add('价格', facts.prices);
+    add('直径', facts.diameters);
+    add('抛型', facts.cycles);
+    add('定轴/高光稳定', facts.axis);
+    add('度数', facts.degrees);
+    add('促销/库存状态', facts.promotions);
+    add('效果/拍摄声明', facts.claims);
+    if (facts.hasColor) lines.push('颜色/色号：原始材料中包含颜色描述，请沿用原文叫法或同色系氛围表达');
+    if (!lines.length) lines.push('未机械识别到数值型参数或固定规格；这是正常情况，不代表产品资料不足。');
+    return lines.join('\n');
   }
 
   function colorFamilies(text) {
@@ -165,7 +166,7 @@
       '妆容适配：围绕用户给出的色系匹配妆容氛围',
       '短促爆点：用最强的一项已知卖点完成高密度表达'
     ];
-    if (facts.prices.length || facts.promotions.length) pool[4] = '购买钩子：只使用事实白名单里的价格或促销信息制造紧迫感';
+    if (facts.prices.length || facts.promotions.length) pool[4] = '购买钩子：只使用用户资料里的价格或促销信息制造紧迫感';
     if (!facts.hasColor) {
       pool[0] = '第一眼氛围冲击：不提具体颜色，用气质和情绪描述上眼感受';
       pool[8] = '妆容氛围：只谈风格适配，不虚构具体色系';
@@ -184,7 +185,7 @@
 
   function inputModeRule(mode) {
     if (mode === 'past_only') {
-      return '本次是【仅过往文案模式】：用户没有填写产品关键词是正常且完整的输入。必须把过往文案当作本款产品的唯一事实来源，从中提取颜色、参数、卖点、价格与促销信息后直接创作；不得拒绝生成、不得要求补充关键词、不得输出说明或提问。';
+      return '本次是【仅过往文案模式】：用户没有填写产品关键词是正常且完整的输入。必须把过往文案当作本款产品的唯一资料来源，理解其中所有明确描述；颜色、数值参数、价格或促销若有则继承，没有也完全不影响生成。即使过往文案只有质感、花纹、氛围或上眼观感，也要据此直接创作；不得拒绝生成、不得要求补充关键词、不得输出说明或提问。';
     }
     if (mode === 'past_and_keywords') {
       return '本次是【过往文案 + 关键词模式】：过往文案提供同款产品的基础事实，关键词提供本次新增或修正信息。两者冲突时以本次关键词为准；不冲突的信息可以合并使用。';
@@ -282,7 +283,7 @@
     sys.push('# 输出契约');
     sys.push('直接以「# 」开头输出；每条 = 1 行标题 + 3～5 行以「> 」开头的正文；条间用单独一行「---」分隔；无前言、编号、解释或代码块。');
     sys.push('标题短促有网感，并与本条指定角度一致。正文要有具体画面和自然口语，避免把词库机械堆叠。');
-    sys.push('产品卖点、参数、价格、促销均为【条件项】：事实白名单有才可以写，没有就用氛围、人设、佩戴感受和情绪表达补足。');
+    sys.push('产品卖点、参数、价格、促销均为【条件项】：用户输入资料明确表达过才可以写。机械抽取只辅助识别结构化字段，不能覆盖或否定过往文案中的定性描述。');
     sys.push('参考素材中的方括号内容只是安全占位符，最终文案严禁输出任何占位符。');
     sys.push('必须恰好输出 ' + n + ' 条，最后一条之后不要输出任何内容。');
 
@@ -290,16 +291,18 @@
     user.push('# 本次输入模式');
     user.push(inputModeRule(inputMode));
     user.push('');
-    user.push('# 产品事实白名单（机械提取结果）');
+    user.push('# 机械识别到的结构化信息（仅作辅助，不是完整清单）');
     user.push(factsBlock(facts));
-    user.push('以上显示“未提供”的字段一律禁止出现；任何示例、词库和常识都不能补充事实。');
+    user.push('未列出的字段仅表示正则没有识别到固定格式，不代表用户没有提供产品描述，也不代表资料不足。');
+    user.push('过往文案和关键词里的明确描述都属于可用信息，包括花纹、质感、通透感、氛围、人设、上眼观感、妆容适配和使用场景；请理解原意后用于创作。');
+    user.push('不要在最终回答中复述识别结果、资料状态或缺失字段，直接输出文案。');
     user.push('');
     if (pastText) {
       user.push('# 同款产品的过往文案（这是【同一款美瞳上一篇帖子】的文案）');
       if (inputMode === 'past_and_keywords') {
         user.push('用途：从中提取该产品的基础信息——颜色/色系名、直径、款式（是否定轴）、抛型、价格、促销、核心卖点。本次关键词中出现的同类字段会覆盖这里的旧值，其余信息继续沿用。');
       } else {
-        user.push('用途：从中提取该产品的【真实信息】——颜色/色系名、直径、款式（是否定轴）、抛型、价格、促销、核心卖点。新生成的文案必须【沿用这些产品信息】保持准确一致。');
+        user.push('用途：理解并继承文案中明确表达的产品内容，包括定性描述与核心卖点；颜色、直径、款式、抛型、价格或促销只有原文出现时才继承。原文没有数值参数是正常情况，不影响生成。');
       }
       user.push('注意：过往文案的【语气/标题/句式不要照抄】——语气由上方风格档决定，每篇都要有新角度、新表达；你只继承其中的【产品信息】，不是模仿它的写法。');
       user.push('<past_copy_data>');

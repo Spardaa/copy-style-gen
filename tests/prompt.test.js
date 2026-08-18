@@ -29,7 +29,7 @@ var built = engine.buildPrompt({ style: 'ssorcon', count: 99, keywords: '翡翠�
 assert.strictEqual(built.count, 10, '生成数量必须限制到 1～10');
 assert.strictEqual(built.inputMode, 'keywords_only');
 assert.ok(built.messages[0].content.indexOf('每条只负责一个主角度') !== -1);
-assert.ok(built.messages[1].content.indexOf('直径：【未提供，禁止提及】') !== -1);
+assert.ok(built.messages[1].content.indexOf('直径：【未提供，禁止提及】') === -1, '未识别字段不应再以禁止项逐条列出');
 
 var pastOnly = engine.buildPrompt({
   style: 'ssorcon',
@@ -42,6 +42,19 @@ assert.ok(pastOnly.messages[0].content.indexOf('仅过往文案模式') !== -1);
 assert.ok(pastOnly.messages[1].content.indexOf('不得因为关键词为空而拒绝') !== -1);
 assert.ok(pastOnly.messages[1].content.indexOf('<keyword_data>') === -1, '仅过往文案模式不应构造虚假的关键词区块');
 assert.deepStrictEqual(Array.prototype.slice.call(pastOnly.facts.prices), ['29r']);
+
+var descriptivePastOnly = engine.buildPrompt({
+  style: 'sakura_blue',
+  count: 3,
+  pastCopies: '像雨夜玻璃一样通透，外圈柔和，上眼是清冷又破碎的氛围感。'
+});
+assert.strictEqual(descriptivePastOnly.inputMode, 'past_only');
+assert.strictEqual(descriptivePastOnly.facts.hasAnyStructured, false);
+assert.ok(descriptivePastOnly.messages[1].content.indexOf('这是正常情况，不代表产品资料不足') !== -1);
+assert.ok(descriptivePastOnly.messages[1].content.indexOf('花纹、质感、通透感、氛围') !== -1);
+assert.ok(descriptivePastOnly.messages[0].content.indexOf('只有质感、花纹、氛围或上眼观感，也要据此直接创作') !== -1);
+assert.ok(descriptivePastOnly.messages[1].content.indexOf('未提供，禁止提及') === -1);
+assert.ok(descriptivePastOnly.messages[1].content.indexOf('不得因为关键词为空而拒绝') !== -1);
 
 var pastAndKeywords = engine.buildPrompt({
   style: 'sakura_red',
