@@ -27,8 +27,37 @@ assert.strictEqual(atmosphereOnly.hasColor, false, '氛围词不应被误判为�
 
 var built = engine.buildPrompt({ style: 'ssorcon', count: 99, keywords: '翡翠绿 29r' });
 assert.strictEqual(built.count, 10, '生成数量必须限制到 1～10');
+assert.strictEqual(built.inputMode, 'keywords_only');
 assert.ok(built.messages[0].content.indexOf('每条只负责一个主角度') !== -1);
 assert.ok(built.messages[1].content.indexOf('直径：【未提供，禁止提及】') !== -1);
+
+var pastOnly = engine.buildPrompt({
+  style: 'ssorcon',
+  count: 5,
+  pastCopies: '# 翡翠绿太绝了\n> 14.5mm 半年抛\n> 29r最后一批',
+  keywords: '   '
+});
+assert.strictEqual(pastOnly.inputMode, 'past_only');
+assert.ok(pastOnly.messages[0].content.indexOf('仅过往文案模式') !== -1);
+assert.ok(pastOnly.messages[1].content.indexOf('不得因为关键词为空而拒绝') !== -1);
+assert.ok(pastOnly.messages[1].content.indexOf('<keyword_data>') === -1, '仅过往文案模式不应构造虚假的关键词区块');
+assert.deepStrictEqual(Array.prototype.slice.call(pastOnly.facts.prices), ['29r']);
+
+var pastAndKeywords = engine.buildPrompt({
+  style: 'sakura_red',
+  count: 3,
+  pastCopies: '棕色 14.2mm 39r',
+  keywords: '本次价格29r，最后一批'
+});
+assert.strictEqual(pastAndKeywords.inputMode, 'past_and_keywords');
+assert.ok(pastAndKeywords.messages[0].content.indexOf('过往文案 + 关键词模式') !== -1);
+assert.ok(pastAndKeywords.messages[1].content.indexOf('冲突时以本次关键词为准') !== -1);
+assert.deepStrictEqual(Array.prototype.slice.call(pastAndKeywords.facts.prices), ['29r'], '关键词价格应覆盖过往价格');
+assert.deepStrictEqual(Array.prototype.slice.call(pastAndKeywords.facts.diameters), ['14.2mm'], '关键词未提供的字段应沿用过往文案');
+
+var emptyInput = engine.buildPrompt({ style: 'sakura_blue', count: 2 });
+assert.strictEqual(emptyInput.inputMode, 'empty');
+assert.ok(emptyInput.messages[0].content.indexOf('仍须按风格直接生成') !== -1);
 
 var parsed = engine.parseCopies('# 标题1\n> 一\n> 二\n> 三\n# 标题2\n> 四\n> 五\n> 六');
 assert.strictEqual(parsed.length, 2, '漏写 --- 时也应按标题拆成两条');

@@ -53,6 +53,29 @@
     return facts;
   }
 
+  function resolveProductFacts(pastText, keywordText) {
+    if (!pastText || !keywordText) return extractProductFacts(pastText, keywordText);
+    var pastFacts = extractProductFacts(pastText, '');
+    var keywordFacts = extractProductFacts('', keywordText);
+    var combinedSource = [pastText, keywordText].join('\n').trim();
+    function preferKeyword(field) {
+      return keywordFacts[field].length ? keywordFacts[field].slice() : pastFacts[field].slice();
+    }
+    return {
+      source: combinedSource,
+      prices: preferKeyword('prices'),
+      diameters: preferKeyword('diameters'),
+      cycles: preferKeyword('cycles'),
+      axis: preferKeyword('axis'),
+      degrees: preferKeyword('degrees'),
+      promotions: preferKeyword('promotions'),
+      claims: preferKeyword('claims'),
+      colorSource: keywordFacts.hasColor ? keywordFacts.colorSource : pastFacts.colorSource,
+      hasColor: keywordFacts.hasColor || pastFacts.hasColor,
+      hasAnyStructured: keywordFacts.hasAnyStructured || pastFacts.hasAnyStructured
+    };
+  }
+
   function factsBlock(facts) {
     function row(label, arr) { return label + '：' + (arr.length ? arr.join('、') : '【未提供，禁止提及】'); }
     return [
@@ -152,6 +175,26 @@
     return out.join('\n');
   }
 
+  function inputModeOf(pastText, keywordText) {
+    if (pastText && keywordText) return 'past_and_keywords';
+    if (pastText) return 'past_only';
+    if (keywordText) return 'keywords_only';
+    return 'empty';
+  }
+
+  function inputModeRule(mode) {
+    if (mode === 'past_only') {
+      return '本次是【仅过往文案模式】：用户没有填写产品关键词是正常且完整的输入。必须把过往文案当作本款产品的唯一事实来源，从中提取颜色、参数、卖点、价格与促销信息后直接创作；不得拒绝生成、不得要求补充关键词、不得输出说明或提问。';
+    }
+    if (mode === 'past_and_keywords') {
+      return '本次是【过往文案 + 关键词模式】：过往文案提供同款产品的基础事实，关键词提供本次新增或修正信息。两者冲突时以本次关键词为准；不冲突的信息可以合并使用。';
+    }
+    if (mode === 'keywords_only') {
+      return '本次是【仅关键词模式】：只以关键词为产品事实来源，直接完成创作，不得要求用户补充过往文案。';
+    }
+    return '本次是【无产品资料模式】：仍须按风格直接生成，只写氛围、人设、情绪和不涉及产品事实的赞美；不得拒绝生成或要求补充资料。';
+  }
+
   // 从自演化词库加权抽样子集；evolve.js 缺失/异常时回退到原全量数组（不影响生成）
   function pick(catKey, fallbackArr, k) {
     if (window.EVOLVE && typeof window.EVOLVE.sample === 'function') {
@@ -167,7 +210,10 @@
     var styleKey = opts.style || 'ssorcon';
     var s = STYLES[styleKey] || STYLES.ssorcon || {};
     var n = Math.max(1, Math.min(10, parseInt(opts.count, 10) || 1));
-    var facts = extractProductFacts(opts.pastCopies, opts.keywords);
+    var pastText = opts.pastCopies && String(opts.pastCopies).trim() ? String(opts.pastCopies).trim() : '';
+    var keywordText = opts.keywords && String(opts.keywords).trim() ? String(opts.keywords).trim() : '';
+    var inputMode = inputModeOf(pastText, keywordText);
+    var facts = resolveProductFacts(pastText, keywordText);
 
     var sys = [];
     sys.push('# 角色');
@@ -175,6 +221,7 @@
     sys.push('');
     sys.push('# 目标');
     sys.push('为指定美瞳产品写 ' + n + ' 条小红书种草文案，严格模仿下方风格档。');
+    sys.push(inputModeRule(inputMode));
     sys.push('');
     sys.push('# 结构与标点（所有风格通用）');
     sys.push(sanitizeReference(COMMON.structureRule || '', facts));
@@ -223,7 +270,7 @@
     sys.push(fewShotsBlock((shotSample || []).map(sanitizeFewShot)) || '（无）');
     sys.push('');
     sys.push('# 禁忌（重要）');
-    sys.push('- 严禁输出具体的二次元角色名（林克/雏田/小舞/知更鸟/温迪等）、品牌或系列专有名（piggyoo/Jumicon/Isoralook 等）、仅出现过一次的生僻色名——这些只是风格方向参考，除非用户关键词明确给出，否则不要写进文案。');
+    sys.push('- 严禁输出具体的二次元角色名（林克/雏田/小舞/知更鸟/温迪等）、品牌或系列专有名（piggyoo/Jumicon/Isoralook 等）、仅出现过一次的生僻色名——这些只是风格方向参考，除非用户输入资料（关键词或过往文案）明确给出，否则不要写进文案。');
     sys.push('- 严禁照抄样例；' + n + ' 条之间标题、角度、卖点必须互不相同。');
     sys.push('- 【产品参数红线·最高优先级·违反即失败】文案里出现的任何【产品事实参数】都必须 100% 来自用户的关键词或过往文案，【用户没提到的，一个都不许自动生成/编造】。包括但不限于：① 产品真实色名/色号（必须与用户给定的产品色系一致；风格色盘里的色感词仅在【与用户给定色系相符】时可用于丰富表达，用户没给颜色时不得自定具体色名）② 直径（14.5mm）③ 价格（29r）④ 款式（定轴/非定轴）⑤ 高光（定位高光/不乱转）⑥ 抛型（半年抛/日抛）⑦ 着色 ⑧ 度数 ⑨ 任何可验证规格。宁可文案只剩氛围/情绪/赞美（阴湿/颓靡/显白/混血感/网感句式/emoji），也绝不杜撰。【样例里出现的具体产品参数 ≠ 你可以用；风格色盘的色感词仅在【与用户给定色系相符】时可用】。');
     sys.push('- 卖点要落到产品的【实际特征】（来自用户输入），不要只空喊赞美；但绝不为"落到产品"而编造用户没给的参数。');
@@ -240,27 +287,48 @@
     sys.push('必须恰好输出 ' + n + ' 条，最后一条之后不要输出任何内容。');
 
     var user = [];
+    user.push('# 本次输入模式');
+    user.push(inputModeRule(inputMode));
+    user.push('');
     user.push('# 产品事实白名单（机械提取结果）');
     user.push(factsBlock(facts));
     user.push('以上显示“未提供”的字段一律禁止出现；任何示例、词库和常识都不能补充事实。');
     user.push('');
-    if (opts.pastCopies && String(opts.pastCopies).trim()) {
+    if (pastText) {
       user.push('# 同款产品的过往文案（这是【同一款美瞳上一篇帖子】的文案）');
-      user.push('用途：从中提取该产品的【真实信息】——颜色/色系名、直径、款式（是否定轴）、抛型、价格、促销、核心卖点。新生成的文案必须【沿用这些产品信息】保持准确一致，不要编造与原文案冲突的参数。');
+      if (inputMode === 'past_and_keywords') {
+        user.push('用途：从中提取该产品的基础信息——颜色/色系名、直径、款式（是否定轴）、抛型、价格、促销、核心卖点。本次关键词中出现的同类字段会覆盖这里的旧值，其余信息继续沿用。');
+      } else {
+        user.push('用途：从中提取该产品的【真实信息】——颜色/色系名、直径、款式（是否定轴）、抛型、价格、促销、核心卖点。新生成的文案必须【沿用这些产品信息】保持准确一致。');
+      }
       user.push('注意：过往文案的【语气/标题/句式不要照抄】——语气由上方风格档决定，每篇都要有新角度、新表达；你只继承其中的【产品信息】，不是模仿它的写法。');
       user.push('<past_copy_data>');
-      user.push(String(opts.pastCopies).trim());
+      user.push(pastText);
       user.push('</past_copy_data>');
       user.push('');
     }
-    var kwFallback = '（用户未额外补充关键词。产品具体参数——色系名/直径/价格/款式/抛型——以【上方过往文案】为准；若过往文案也没有，则【严禁编造】任何色名/数值/价位，宁可只用氛围/情绪/赞美/网感句式 + emoji 表达，也不要杜撰产品参数。）';
-    user.push('# 本次产品关键词（特征/颜色/直径/价格/促销钩子等，据此生成）');
-    user.push('<keyword_data>');
-    user.push((opts.keywords && String(opts.keywords).trim()) || kwFallback);
-    user.push('</keyword_data>');
-    user.push('');
+    if (keywordText) {
+      user.push('# 本次产品关键词（特征/颜色/直径/价格/促销钩子等）');
+      if (inputMode === 'past_and_keywords') user.push('关键词是本次最新补充：若与过往文案冲突，以这里为准；其余产品事实继续沿用过往文案。');
+      user.push('<keyword_data>');
+      user.push(keywordText);
+      user.push('</keyword_data>');
+      user.push('');
+    } else if (inputMode === 'past_only') {
+      user.push('# 关键词状态');
+      user.push('本次未填写关键词；这不影响生成。请完整使用上方过往文案中的产品事实和卖点。');
+      user.push('');
+    }
     user.push('# 任务');
-    user.push('按上述风格档生成 ' + n + ' 条文案，每条标题/角度/卖点互不重复。');
+    if (inputMode === 'past_only') {
+      user.push('仅根据上方同款过往文案提取产品信息，按所选风格重新创作 ' + n + ' 条文案。必须直接生成，不得因为关键词为空而拒绝、解释或提问。');
+    } else if (inputMode === 'past_and_keywords') {
+      user.push('综合过往文案与本次关键词，按所选风格生成 ' + n + ' 条文案；冲突信息以关键词为准。');
+      user.push('凡是关键词已经提供的字段，只能使用关键词里的最新值，不得再使用过往文案中的同类旧值。');
+    } else {
+      user.push('按上述风格档生成 ' + n + ' 条文案。');
+    }
+    user.push('每条标题、角度和卖点互不重复。');
     user.push('【最后强调·最重要】只允许写用户在上面【明确提到】的产品参数；用户没提到的（价格/直径/定轴/高光/抛型/色系名/度数/着色……任何一个）都【不许自动生成】。拿不准有没有的，就不写。直接输出，第 1 条以 # 开头。');
 
     return {
@@ -269,7 +337,8 @@
         { role: 'user', content: user.join('\n') }
       ],
       facts: facts,
-      count: n
+      count: n,
+      inputMode: inputMode
     };
   }
 
