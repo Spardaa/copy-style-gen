@@ -29,7 +29,7 @@ async function run() {
   ].forEach(function (id) { ids[id] = element(id, events); });
   ids.baseUrl.value = 'https://example.test/v1';
   ids.apiKey.value = 'test-key';
-  ids.model.value = 'test-model';
+  ids.model.value = 'deepseek-v4-flash';
   ids.count.value = '1';
   ids.temperature.value = '0.95';
 
@@ -40,7 +40,7 @@ async function run() {
     clearTimeout: clearTimeout,
     localStorage: {
       getItem: function (key) {
-        return { baseUrl: 'https://example.test/v1', apiKey: 'test-key', model: 'test-model', count: '1', temperature: '0.95' }[key] || null;
+        return { baseUrl: 'https://example.test/v1', apiKey: 'test-key', model: 'deepseek-v4-flash', count: '1', temperature: '0.95' }[key] || null;
       },
       setItem: function () {}
     },
@@ -50,8 +50,10 @@ async function run() {
       createElement: function () { return element('card', events); },
       body: { appendChild: function () {}, removeChild: function () {} }
     },
-    fetch: async function () {
+    fetch: async function (url, options) {
       events.push('main-request');
+      var body = JSON.parse(options.body);
+      assert.deepStrictEqual(body.thinking, { type: 'disabled' }, 'DeepSeek V4 应显式关闭 thinking');
       return {
         ok: true,
         json: async function () { return { choices: [{ message: { content: '# 标题\n> 一\n> 二\n> 三' } }] }; }

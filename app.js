@@ -185,12 +185,16 @@
     var ctrl = new AbortController();
     var timer = setTimeout(function () { ctrl.abort(); }, 90000);
 
+    var requestBody = { model: model, messages: messages, temperature: temperature, max_tokens: maxTokens, stream: false };
+    // DeepSeek V4 默认开启高强度思考；本应用的创作/格式整理/恢复/扩库均为短任务，显式关闭以降低延迟并避免推理耗尽输出额度。
+    if (/^deepseek-v4-(?:flash|pro)$/i.test(model)) requestBody.thinking = { type: 'disabled' };
+
     var resp;
     try {
       resp = await fetch(buildUrl($('baseUrl').value), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-        body: JSON.stringify({ model: model, messages: messages, temperature: temperature, max_tokens: maxTokens, stream: false }),
+        body: JSON.stringify(requestBody),
         signal: ctrl.signal
       });
     } catch (e) {
