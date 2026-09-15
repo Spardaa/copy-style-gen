@@ -11,9 +11,8 @@
     return;
   }
   var buildPrompt = window.PromptEngine.buildPrompt;
-  var parseCopies = window.PromptEngine.parseCopies;
-  var validateCopies = window.PromptEngine.validateCopies;
-  var classifyIssues = window.PromptEngine.classifyIssues;
+  var parseMaterials = window.PromptEngine.parseMaterials;
+  var validateMaterials = window.PromptEngine.validateMaterials;
   var buildFormatRepairMessages = window.PromptEngine.buildFormatRepairMessages;
   var buildEmptyRecoveryMessages = window.PromptEngine.buildEmptyRecoveryMessages;
   var VALID_STYLES = Object.keys(window.PromptEngine.STYLES);
@@ -26,14 +25,18 @@
 
   // intensity 已从 UI 移除，固定为标准档
   var state = { style: 'ssorcon' };
+  var batch = null;
+  var selectedTitle = -1;
+  var selectedLines = [];
+  var copying = false;
 
-  function readCount() {
-    var el = $('count');
-    var n = parseInt(el && el.value, 10);
-    if (!isFinite(n)) n = 5;
-    n = Math.max(1, Math.min(10, n));
-    if (el) el.value = String(n);
-    return n;
+  function readCounts() {
+    var counts = window.PromptEngine.normalizeCounts({ titleCount: $('titleCount').value, bodyCount: $('bodyCount').value });
+    ['titleCount', 'bodyCount'].forEach(function (key) {
+      $(key).value = String(counts[key]);
+      LS.set(key, String(counts[key]));
+    });
+    return counts;
   }
 
   function readTemperature() {
@@ -67,7 +70,9 @@
     $('model').value = LS.get('model', 'deepseek-chat');
     var saved = LS.get('style', 'ssorcon');
     state.style = VALID_STYLES.indexOf(saved) !== -1 ? saved : 'ssorcon';
-    $('count').value = LS.get('count', '5');
+    $('titleCount').value = LS.get('titleCount', '10');
+    $('bodyCount').value = LS.get('bodyCount', '20');
+    readCounts();
     var tempInput = $('temperature');
     if (tempInput) {
       tempInput.value = LS.get('temperature', '0.95');
@@ -75,7 +80,7 @@
     }
   }
   // 设置项自动保存
-  Array.prototype.forEach.call(['baseUrl', 'apiKey', 'model', 'count'], function (id) {
+  Array.prototype.forEach.call(['baseUrl', 'apiKey', 'model'], function (id) {
     var el = $(id);
     if (el) el.addEventListener('change', function () { LS.set(id, el.value); });
   });
@@ -214,17 +219,14 @@
     if (!text) throw makeEmptyResponseError(data);
     return text;
   }
-  // 生成流程专用：按生成数量推导 max_tokens
-  async function callLLM(messages, temperature, requestedCount) {
-    var count = requestedCount || readCount();
-    var maxTokens = Math.min(8000, count * 600 + 200);
+  // 标题与单行正文分别预算；默认 10 标题 + 20 句 = 3200 tokens。
+  async function callLLM(messages, temperature, counts) {
+    var maxTokens = Math.min(9000, counts.titleCount * 70 + counts.bodyCount * 110 + 300);
     return callLLMCore(messages, temperature, maxTokens);
   }
   // 格式修复只做结构整理：短提示词、低温度、较小输出预算，避免再次跑完整创作链路
-  async function callFormatRepair(messages, requestedCount) {
-    var count = requestedCount || readCount();
-    var maxTokens = Math.min(5000, count * 450 + 200);
-    return callLLMCore(messages, 0, maxTokens);
+  async function callFormatRepair(messages, counts) {
+    return callLLM(messages, 0, counts);
   }
   // 暴露给 evolve.js 做异步扩库（显式 max_tokens，默认 800）
   window.callLLM = function (messages, temperature, maxTokens) {
@@ -238,44 +240,101 @@
     });
   }
 
-  function renderResults(copies) {
+  function renderResults() {
     var box = $('results');
     $('resultsHead').style.display = 'flex';
-    $('resultsTitle').textContent = '生成结果 · ' + copies.length + ' 条';
-    if (!copies.length) {
-      box.innerHTML = '<div class="status">未能解析出文案，请检查模型输出或重试。</div>';
-      return;
-    }
+    $('resultsTitle').textContent = '标题 ' + batch.parts.titles.length + ' 条 · 正文 ' + batch.parts.lines.length + ' 句';
     box.innerHTML = '';
-    copies.forEach(function (c, i) {
-      var card = document.createElement('div');
-      card.className = 'copy-card';
-      var linesHtml = c.lines.map(function (l) { return '<div>' + escapeHtml(l) + '</div>'; }).join('');
-      card.innerHTML = '<button class="copy-btn" data-i="' + i + '">复制</button>' +
-        '<button class="ban-btn" data-i="' + i + '" title="降低这条文案所用词句的后续推荐权重；累计两次才拉黑">👎</button>' +
-        '<div class="title">' + escapeHtml(c.title) + '</div>' +
-        '<div class="qlines">' + linesHtml + '</div>';
-      box.appendChild(card);
+    ['titles', 'lines'].forEach(function (kind) {
+      var section = document.createElement('section');
+      section.className = 'material-section';
+      var heading = document.createElement('h3');
+      heading.textContent = kind === 'titles' ? '标题 · 选择一个' : '正文 · 按点击顺序多选';
+      section.appendChild(heading);
+      if (!batch.parts[kind].length) {
+        var empty = document.createElement('p');
+        empty.textContent = '本次未返回此类素材，请重新生成。';
+        section.appendChild(empty);
+      }
+      batch.parts[kind].forEach(function (text, i) {
+        var row = document.createElement('div');
+        row.className = 'material-row';
+        var label = document.createElement('label');
+        label.className = 'material-option';
+        var input = document.createElement('input');
+        input.type = kind === 'titles' ? 'radio' : 'checkbox';
+        input.name = kind === 'titles' ? 'materialTitle' : 'materialLine';
+        input.dataset.kind = kind;
+        input.dataset.index = String(i);
+        input.checked = kind === 'titles' ? selectedTitle === i : selectedLines.indexOf(i) !== -1;
+        var order = document.createElement('span');
+        order.className = 'selection-order';
+        var content = document.createElement('span');
+        content.textContent = text;
+        label.appendChild(input); label.appendChild(order); label.appendChild(content);
+        input.onchange = function () {
+          if (kind === 'titles') selectedTitle = i;
+          else {
+            var position = selectedLines.indexOf(i);
+            if (input.checked && position === -1) selectedLines.push(i);
+            if (!input.checked && position !== -1) selectedLines.splice(position, 1);
+          }
+          updateComposition();
+        };
+        var dislike = document.createElement('button');
+        dislike.className = 'material-dislike';
+        dislike.type = 'button';
+        dislike.textContent = batch.disliked[kind + i] ? '已反馈' : '👎';
+        dislike.disabled = !!batch.disliked[kind + i];
+        dislike.setAttribute('aria-label', '降低这条' + (kind === 'titles' ? '标题' : '正文') + '所用词句的推荐权重');
+        dislike.onclick = function () {
+          var matched = false;
+          if (window.EVOLVE && window.EVOLVE.banCard) {
+            try { matched = window.EVOLVE.banCard(text, batch.style, batch.exposure, kind); } catch (e) {}
+          }
+          batch.disliked[kind + i] = true;
+          dislike.textContent = matched ? '已降权' : '未匹配';
+          dislike.disabled = true;
+          refreshLibrary();
+        };
+        row.appendChild(label); row.appendChild(dislike); section.appendChild(row);
+      });
+      box.appendChild(section);
     });
-    Array.prototype.forEach.call(box.querySelectorAll('.copy-btn'), function (btn) {
-      btn.onclick = function () { copyOne(copies[+btn.dataset.i], btn); };
-    });
-    Array.prototype.forEach.call(box.querySelectorAll('.ban-btn'), function (btn) {
-      btn.onclick = function () {
-        var c = copies[+btn.dataset.i];
-        if (window.EVOLVE && window.EVOLVE.banCard) {
-          try { window.EVOLVE.banCard(toText(c)); } catch (e) {}
-        }
-        var lp = $('libPanel'); if (lp && lp.open) { try { renderLibPanel(); } catch (e) {} }
-        btn.textContent = '已降权';
-        btn.disabled = true;
-      };
+    $('composer').hidden = false;
+    updateComposition();
+  }
+
+  function selectedParts() {
+    if (!batch) return { titles: [], lines: [] };
+    return {
+      titles: selectedTitle < 0 ? [] : [batch.parts.titles[selectedTitle]],
+      lines: selectedLines.map(function (i) { return batch.parts.lines[i]; })
+    };
+  }
+
+  function compositionText(parts) {
+    return parts.titles.concat(parts.lines.length ? [parts.lines.join('\n')] : []).join('\n\n');
+  }
+
+  function updateComposition() {
+    var parts = selectedParts();
+    $('compositionPreview').textContent = compositionText(parts) || '在上方选择标题和正文，组合内容会显示在这里。';
+    $('selectionSummary').textContent = '已选 ' + parts.titles.length + ' 个标题 · ' + parts.lines.length + ' 句正文';
+    $('copySelectionBtn').disabled = copying || !parts.titles.length || !parts.lines.length;
+    Array.prototype.forEach.call($('results').querySelectorAll('.material-option input'), function (input) {
+      var i = +input.dataset.index;
+      var title = input.dataset.kind === 'titles';
+      var position = title ? (selectedTitle === i ? 0 : -1) : selectedLines.indexOf(i);
+      input.checked = position !== -1;
+      input.parentNode.classList.toggle('selected', input.checked);
+      input.nextSibling.textContent = position === -1 ? '' : (title ? '✓' : String(position + 1));
     });
   }
 
-  function toText(c) {
-    // 复制为纯文本：去掉 # 和 > 标记，标题与正文之间空一行
-    return c.title + '\n\n' + (c.lines || []).join('\n');
+  function refreshLibrary() {
+    var lp = $('libPanel');
+    if (lp && lp.open) { try { renderLibPanel(); } catch (e) {} }
   }
 
   async function copyText(text) {
@@ -295,25 +354,26 @@
     } catch (e) { return false; }
   }
   function flash(btn, ok) {
-    var old = btn.textContent;
+    if (btn._flashTimer) clearTimeout(btn._flashTimer);
     btn.textContent = ok ? '已复制 ✓' : '复制失败';
-    setTimeout(function () { btn.textContent = old; }, 1200);
+    btn._flashTimer = setTimeout(function () { btn.textContent = '📋 复制组合'; }, 1200);
   }
-  async function copyOne(c, btn) {
-    var ok = await copyText(toText(c));
-    flash(btn, ok);
-    // 复制成功 = 偏好信号：归因本轮暴露的词项 + 触发异步扩库
-    if (ok && window.EVOLVE && window.EVOLVE.recordCopy) {
-      try { window.EVOLVE.recordCopy(toText(c), state.style); } catch (e) {}
-    }
-  }
-  async function copyAll(copies) {
-    var text = copies.map(toText).join('\n\n');
+  async function copySelection() {
+    var parts = selectedParts();
+    if (copying || !batch || !parts.titles.length || !parts.lines.length) return;
+    copying = true;
+    var sourceBatch = batch;
+    var btn = $('copySelectionBtn');
+    btn.disabled = true;
+    var text = compositionText(parts);
     var ok = await copyText(text);
-    flash($('copyAllBtn'), ok);
+    copying = false;
+    flash(btn, ok);
     if (ok && window.EVOLVE && window.EVOLVE.recordCopy) {
-      try { window.EVOLVE.recordCopy(text, state.style); } catch (e) {}
+      try { window.EVOLVE.recordCopy(text, sourceBatch.style, sourceBatch.exposure, parts); } catch (e) {}
     }
+    refreshLibrary();
+    updateComposition();
   }
 
   // ---- 词库状态面板 ----
@@ -353,9 +413,9 @@
     var rows = cat ? cat.items : [];
     if (onlyCand) rows = rows.filter(function (x) { return x.tier === 'candidate' || x.banned; });
 
-    var html = '<table class="lib-table"><thead><tr><th>词句</th><th>状态</th><th>shown</th><th>copy</th><th>👎</th><th>权重</th><th></th></tr></thead><tbody>';
+    var html = '<table class="lib-table"><thead><tr><th>词句</th><th>状态</th><th>抽样</th><th>标题使用</th><th>正文使用</th><th>标题复制</th><th>正文复制</th><th>复制总计</th><th>👎</th><th>权重</th><th></th></tr></thead><tbody>';
     if (!rows.length) {
-      html += '<tr><td colspan="7" class="lib-empty">（无）</td></tr>';
+      html += '<tr><td colspan="11" class="lib-empty">（无）</td></tr>';
     } else {
       rows.forEach(function (it) {
         var esc = escapeHtml(it.sig || '');
@@ -363,6 +423,10 @@
           '<td class="lib-word">' + esc + '</td>' +
           '<td>' + tierBadge(it.tier, it.banned) + '</td>' +
           '<td>' + it.shown + '</td>' +
+          '<td>' + (it.usedTitle || 0) + '</td>' +
+          '<td>' + (it.usedBody || 0) + '</td>' +
+          '<td>' + (it.copyTitle || 0) + '</td>' +
+          '<td>' + (it.copyBody || 0) + '</td>' +
           '<td>' + it.copy + '</td>' +
           '<td>' + (it.dislike || 0) + '</td>' +
           '<td><b>' + it.weight + '</b></td>' +
@@ -401,30 +465,32 @@
   // ---- 主流程 ----
   async function generate() {
     var btn = $('genBtn');
-    var box = $('results');
+    var box = $('generationStatus');
     btn.disabled = true;
     box.innerHTML = '<div class="status"><span class="spin"></span> 正在生成，请稍候…</div>';
-    $('resultsHead').style.display = 'none';
     try {
-      var count = readCount();
+      var counts = readCounts();
+      var generationStyle = state.style;
       var temperature = readTemperature();
       if (window.EVOLVE && window.EVOLVE.bumpEpoch) { try { window.EVOLVE.bumpEpoch(); } catch (e) {} }
       var built = buildPrompt({
-        style: state.style,
+        style: generationStyle,
         pastCopies: $('pastCopies').value,
         keywords: $('keywords').value,
-        count: count,
+        titleCount: counts.titleCount,
+        bodyCount: counts.bodyCount,
         intensity: 'mid'
       });
+      var exposure = window.EVOLVE && window.EVOLVE.captureExposure ? window.EVOLVE.captureExposure(built.messages[0].content) : [];
       var raw;
       try {
-        raw = await callLLM(built.messages, temperature, count);
+        raw = await callLLM(built.messages, temperature, counts);
       } catch (firstError) {
         if (!firstError || firstError.code !== 'EMPTY_LLM_RESPONSE' || !buildEmptyRecoveryMessages) throw firstError;
         box.innerHTML = '<div class="status"><span class="spin"></span> 首次未收到正文，正在进行一次恢复审查…</div>';
-        var recoveryMessages = buildEmptyRecoveryMessages(built.messages, count, firstError.diagnostic);
+        var recoveryMessages = buildEmptyRecoveryMessages(built.messages, counts, firstError.diagnostic);
         try {
-          raw = await callLLM(recoveryMessages, Math.min(temperature, 0.4), count);
+          raw = await callLLM(recoveryMessages, Math.min(temperature, 0.4), counts);
         } catch (retryError) {
           if (retryError && retryError.code === 'EMPTY_LLM_RESPONSE') {
             throw new Error(emptyFailureAdvice(firstError, retryError));
@@ -432,22 +498,33 @@
           throw retryError;
         }
       }
-      var copies = parseCopies(raw);
-      var issues = validateCopies ? validateCopies(copies, built.facts, count) : [];
-      var issueGroups = classifyIssues ? classifyIssues(issues) : { format: issues, safety: [], quality: [] };
-      if (issueGroups.format.length && buildFormatRepairMessages) {
+      var parts = parseMaterials(raw);
+      var issues = validateMaterials(parts, counts);
+      var repairNote = '';
+      if (issues.length && buildFormatRepairMessages) {
         box.innerHTML = '<div class="status"><span class="spin"></span> 文案已生成，正在整理输出格式…</div>';
-        var repairMessages = buildFormatRepairMessages(raw, issueGroups.format, count);
-        raw = await callFormatRepair(repairMessages, count);
-        copies = parseCopies(raw);
-        issues = validateCopies ? validateCopies(copies, built.facts, count) : [];
-        issueGroups = classifyIssues ? classifyIssues(issues) : { format: issues, safety: [], quality: [] };
+        try {
+          var repaired = parseMaterials(await callFormatRepair(buildFormatRepairMessages(raw, issues, counts), counts));
+          // 修复失败或丢失内容时保留已经解析成功的素材。
+          if (Math.abs(repaired.titles.length - counts.titleCount) < Math.abs(parts.titles.length - counts.titleCount)) parts.titles = repaired.titles;
+          if (Math.abs(repaired.lines.length - counts.bodyCount) < Math.abs(parts.lines.length - counts.bodyCount)) parts.lines = repaired.lines;
+        } catch (repairError) {
+          repairNote = '格式整理失败：' + (repairError.message || String(repairError));
+        }
+        issues = validateMaterials(parts, counts);
       }
-      renderResults(copies);
-      if (issues.length) $('resultsTitle').textContent += ' · 质量检查有提示';
-      window._lastCopies = copies;
+      if (!parts.titles.length && !parts.lines.length) throw new Error('未能识别标题和正文，格式修复未成功。请重试或检查模型是否支持 JSON 文本输出。' + (repairNote ? '\n' + repairNote : ''));
+      parts.titles = parts.titles.slice(0, counts.titleCount);
+      parts.lines = parts.lines.slice(0, counts.bodyCount);
+      batch = { parts: parts, style: generationStyle, exposure: exposure, disliked: {} };
+      selectedTitle = -1;
+      selectedLines = [];
+      renderResults();
+      box.textContent = issues.length ? '已保留可用素材。' + issues.join('；') + '。可选择复制或重新生成。' + repairNote : '';
+      if (window.EVOLVE && window.EVOLVE.recordUsed) { try { window.EVOLVE.recordUsed(parts, generationStyle, exposure); } catch (e) {} }
+      refreshLibrary();
       // 先让结果完成渲染，再异步扩库；不占用主生成与格式修复阶段的模型并发
-      var styleForExpand = state.style;
+      var styleForExpand = generationStyle;
       setTimeout(function () {
         if (window.EVOLVE && window.EVOLVE.expand) { try { window.EVOLVE.expand(styleForExpand); } catch (e) {} }
       }, 0);
@@ -462,8 +539,10 @@
   function bindAndInit() {
     var genBtn = $('genBtn');
     if (genBtn) genBtn.onclick = generate;
-    var copyAllBtn = $('copyAllBtn');
-    if (copyAllBtn) copyAllBtn.onclick = function () { copyAll(window._lastCopies || []); };
+    $('copySelectionBtn').onclick = copySelection;
+    $('clearSelectionBtn').onclick = function () {
+      selectedTitle = -1; selectedLines = []; updateComposition();
+    };
     // 词库状态面板：展开时渲染 + 各控件绑定
     var libPanel = $('libPanel');
     if (libPanel) libPanel.addEventListener('toggle', function () { if (libPanel.open) { try { renderLibPanel(); } catch (e) {} } });
@@ -482,8 +561,7 @@
     var libOnlyCand = $('libOnlyCand');
     if (libOnlyCand) libOnlyCand.onchange = function () { try { renderLibPanel(); } catch (e) {} };
     try { loadSettings(); } catch (e) { console.error('[app.js] loadSettings 失败：', e); }
-    var countInput = $('count');
-    if (countInput) countInput.addEventListener('change', readCount);
+    ['titleCount', 'bodyCount'].forEach(function (key) { $(key).addEventListener('change', readCounts); });
     try { initStyleRadios(); } catch (e) { console.error('[app.js] initStyleRadios 失败：', e); }
   }
   bindAndInit();
