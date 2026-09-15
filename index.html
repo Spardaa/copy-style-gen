@@ -152,27 +152,6 @@
     margin-top: 22px; text-align: center; color: var(--muted); font-size: 11px;
     letter-spacing: .04em; user-select: text;
   }
-  #results { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  .material-section { min-width:0; }
-  .material-section h3 { font-size:14px; margin:0 0 10px; }
-  .material-row { display:flex; gap:4px; margin-bottom:8px; align-items:center; }
-  .material-option { display:flex; flex:1; align-items:flex-start; gap:8px; min-width:0; margin:0; padding:12px; background:white; border:1px solid var(--border); border-radius:10px; cursor:pointer; color:var(--text); font-size:14px; overflow-wrap:anywhere; }
-  .material-option.selected { border-color:var(--accent); background:var(--accent-soft); }
-  .material-option input { width:16px; height:16px; margin:4px 0 0; padding:0; flex-shrink:0; accent-color:var(--accent); }
-  .material-option:focus-within { outline:2px solid var(--accent); outline-offset:2px; }
-  .selection-order { color:var(--accent); font-size:12px; font-weight:700; }
-  .selection-order:empty { display:none; }
-  .material-dislike { border:1px solid var(--border); background:white; border-radius:8px; padding:8px; cursor:pointer; flex-shrink:0; }
-  .material-dislike:disabled { opacity:.5; cursor:default; }
-  #composer { margin-top:20px; }
-  #composer h3 { margin:0; font-size:16px; }
-  #compositionPreview { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; font-size:14px; min-height:90px; margin:16px 0; }
-  .composer-actions { display:flex; gap:10px; align-items:center; }
-  .composer-actions .btn-primary { width:auto; flex:1; margin:0; }
-  #generationStatus { font-size:13px; color:var(--muted); margin:12px 0; }
-  #libTable { overflow-x:auto; }
-  .lib-table th { white-space:nowrap; }
-  @media(max-width:600px) { #results { grid-template-columns:1fr; } .row { flex-wrap:wrap; } .row > div { min-width:130px; } }
 </style>
 </head>
 <body>
@@ -255,12 +234,8 @@
       </div>
       <div class="row">
         <div>
-          <label for="titleCount">标题数量（1–30）</label>
-          <input id="titleCount" type="number" min="1" max="30" value="10" />
-        </div>
-        <div>
-          <label for="bodyCount">正文句子数量（1–50）</label>
-          <input id="bodyCount" type="number" min="1" max="50" value="20" />
+          <label>生成数量</label>
+          <input id="count" type="number" min="1" max="10" value="5" />
         </div>
         <div>
           <label>多样性（temperature = <span id="tempVal">0.95</span>）</label>
@@ -268,26 +243,15 @@
         </div>
       </div>
     </div>
-    <div class="hint">标题与正文独立生成；每条正文是一句可自由组合的素材。</div>
-    <button class="btn-primary" id="genBtn">✨ 生成标题和正文</button>
+    <button class="btn-primary" id="genBtn">✨ 生成文案</button>
   </div>
 
   <!-- 输出区 -->
-  <div id="generationStatus" role="status" aria-live="polite"></div>
   <div class="results-head" id="resultsHead" style="display:none">
     <h2 id="resultsTitle">生成结果</h2>
+    <button class="btn-ghost" id="copyAllBtn">📋 复制全部</button>
   </div>
   <div id="results"></div>
-  <section class="card" id="composer" hidden>
-    <h3>组合预览</h3>
-    <div class="hint" id="selectionSummary" role="status" aria-live="polite">已选 0 个标题 · 0 句正文</div>
-    <div class="hint">选一个标题和多句正文；正文按点击顺序排列，取消后重选可调整顺序。</div>
-    <pre id="compositionPreview"></pre>
-    <div class="composer-actions">
-      <button class="btn-ghost" id="clearSelectionBtn" type="button">清空选择</button>
-      <button class="btn-primary" id="copySelectionBtn" type="button" disabled>📋 复制组合</button>
-    </div>
-  </section>
 
   <!-- 词库状态面板（自演化调试/管理） -->
   <details id="libPanel" style="margin-top:8px">
@@ -306,23 +270,22 @@
       <label style="margin:0"><input type="checkbox" id="libOnlyCand"> 只看 AI 新增/候选</label>
     </div>
     <div id="libTable"></div>
-    <p class="hint">抽样＝提供给模型的次数；使用＝生成结果匹配到词句的批次；复制＝复制成功且选中内容匹配到词句的次数。标题/正文分别统计，同次复制总计只加一次。历史复制总计保留，分区统计从本版本开始。</p>
     <div class="lib-blacklist">
       <div class="lib-ban-title">🚫 黑名单（<span id="libBanCount">0</span>） · 拉黑的词句永不参与抽样</div>
       <div id="libBanList"></div>
     </div>
   </details>
 
-  <footer class="version-footer" aria-label="版本信息">版本 2026.09.15.1</footer>
+  <footer class="version-footer" aria-label="版本信息">版本 2026.09.15.2</footer>
 </div>
 
 <script src="styles/common.js"></script>
 <script src="styles/ssorcon.js"></script>
 <script src="styles/sakura_blue.js"></script>
 <script src="styles/sakura_red.js"></script>
-<script src="evolve.js?v=2026091501"></script>
-<script src="prompt.js?v=2026091501"></script>
+<script src="evolve.js?v=2026091502"></script>
+<script src="prompt.js?v=2026091502"></script>
 <script src="auth.js"></script>
-<script src="app.js?v=2026091501"></script>
+<script src="app.js?v=2026091502"></script>
 </body>
 </html>

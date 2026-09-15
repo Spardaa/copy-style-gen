@@ -25,13 +25,10 @@ assert.strictEqual(noColor.hasColor, false, '“显白”不应被误判为用�
 var atmosphereOnly = engine.extractProductFacts('', '奶凶暗黑感 氛围很绝');
 assert.strictEqual(atmosphereOnly.hasColor, false, '氛围词不应被误判为具体产品颜色');
 
-var built = engine.buildPrompt({ style: 'ssorcon', titleCount: 99, bodyCount: 99, keywords: '翡翠绿 29r' });
-assert.strictEqual(built.titleCount, 30);
-assert.strictEqual(built.bodyCount, 50);
+var built = engine.buildPrompt({ style: 'ssorcon', count: 99, keywords: '翡翠绿 29r' });
+assert.strictEqual(built.count, 10, '生成数量必须限制到 1～10');
 assert.strictEqual(built.inputMode, 'keywords_only');
-assert.ok(built.messages[0].content.indexOf('两个独立素材池') !== -1);
-assert.ok(built.messages[0].content.indexOf('1 行标题 + 3～5 行') === -1);
-assert.ok(built.messages[0].content.indexOf('titles 恰好 30') !== -1);
+assert.ok(built.messages[0].content.indexOf('每条只负责一个主角度') !== -1);
 assert.ok(built.messages[1].content.indexOf('直径：【未提供，禁止提及】') === -1, '未识别字段不应再以禁止项逐条列出');
 
 var pastOnly = engine.buildPrompt({
@@ -109,7 +106,7 @@ assert.strictEqual(grouped.quality.length, 1);
 var formatMessages = engine.buildFormatRepairMessages(
   '# 标题\n正文一\n正文二\n正文三',
   grouped.format,
-  { titleCount: 1, bodyCount: 3 }
+  1
 );
 assert.strictEqual(formatMessages.length, 2, '格式修复应使用独立短提示词');
 assert.ok(formatMessages[0].content.indexOf('纯文本格式整理器') !== -1);
@@ -118,28 +115,12 @@ assert.ok(formatMessages[1].content.indexOf('<draft>') !== -1);
 
 var recoveryMessages = engine.buildEmptyRecoveryMessages(
   [{ role: 'system', content: '原系统提示' }, { role: 'user', content: '原任务' }],
-  { titleCount: 3, bodyCount: 7 },
+  3,
   { finishReason: 'stop' }
 );
 assert.strictEqual(recoveryMessages.length, 3, '空响应恢复应保留原任务并追加审查指令');
 assert.strictEqual(recoveryMessages[0].content, '原系统提示');
-assert.ok(recoveryMessages[2].content.indexOf('titles 恰好 3') !== -1);
-assert.ok(recoveryMessages[2].content.indexOf('lines 恰好 7') !== -1);
-assert.ok(recoveryMessages[2].content.indexOf('第一个字符必须是 {') !== -1);
-
-assert.strictEqual(engine.normalizeCounts({}).titleCount, 10);
-assert.strictEqual(engine.normalizeCounts({}).bodyCount, 20);
-assert.strictEqual(engine.normalizeCounts({ titleCount: -2 }).titleCount, 1);
-var parts = engine.parseMaterials('```json\n{"titles":["# 标题一","标题一",null],"lines":["正文一","正文二"]}\n```');
-assert.strictEqual(parts.titles.length, 1);
-assert.strictEqual(parts.lines.length, 2);
-assert.strictEqual(engine.validateMaterials(parts, { titleCount: 1, bodyCount: 2 }).length, 0);
-assert.strictEqual(engine.parseMaterials('接口错误，请重试').lines.length, 0);
-assert.strictEqual(engine.parseMaterials('null').titles.length, 0);
-assert.strictEqual(engine.parseMaterials('{"titles":["14.5mm 的氛围"],"lines":["29.9元"]}').titles[0], '14.5mm 的氛围', '清理编号不能误删产品小数');
-var markdownParts = engine.parseMaterials('## 标题\n1. 标题一\n2. 标题二\n## 正文\n> 正文一\n- 正文二');
-assert.strictEqual(markdownParts.titles.length, 2);
-assert.strictEqual(markdownParts.lines.length, 2);
-assert.strictEqual(engine.validateMaterials(markdownParts, { titleCount: 10, bodyCount: 20 }).length, 2);
+assert.ok(recoveryMessages[2].content.indexOf('恰好 3 条') !== -1);
+assert.ok(recoveryMessages[2].content.indexOf('第一个字符必须是 #') !== -1);
 
 console.log('prompt tests passed');

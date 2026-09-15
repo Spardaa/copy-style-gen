@@ -210,8 +210,7 @@
     var COMMON = window.COMMON || {};
     var styleKey = opts.style || 'ssorcon';
     var s = STYLES[styleKey] || STYLES.ssorcon || {};
-    var counts = normalizeCounts(opts);
-    var target = counts.titleCount + ' 条独立标题和 ' + counts.bodyCount + ' 条独立正文句子';
+    var n = Math.max(1, Math.min(10, parseInt(opts.count, 10) || 1));
     var pastText = opts.pastCopies && String(opts.pastCopies).trim() ? String(opts.pastCopies).trim() : '';
     var keywordText = opts.keywords && String(opts.keywords).trim() ? String(opts.keywords).trim() : '';
     var inputMode = inputModeOf(pastText, keywordText);
@@ -222,11 +221,11 @@
     sys.push(sanitizeReference(COMMON.role || '你是顶级小红书/电商美瞳种草文案写手。', facts));
     sys.push('');
     sys.push('# 目标');
-    sys.push('为指定美瞳产品写 ' + target + '，严格模仿下方风格档。标题与正文是两个独立素材池，不配对，不按文章分组。');
+    sys.push('为指定美瞳产品写 ' + n + ' 条小红书种草文案，严格模仿下方风格档。');
     sys.push(inputModeRule(inputMode));
     sys.push('');
     sys.push('# 结构与标点（所有风格通用）');
-    sys.push('标题短促有网感，约10～22字，可带1～2簇emoji；每条正文约12～40字，仅为一行独立、完整的句子，可自由组合，不依赖任何标题或相邻句子。');
+    sys.push(sanitizeReference(COMMON.structureRule || '', facts));
     sys.push(sanitizeReference(COMMON.punctuationRule || '', facts));
     sys.push('');
     sys.push('# 通用高频句式（三风格共用，自由穿插）');
@@ -273,20 +272,20 @@
     sys.push('');
     sys.push('# 禁忌（重要）');
     sys.push('- 严禁输出具体的二次元角色名（林克/雏田/小舞/知更鸟/温迪等）、品牌或系列专有名（piggyoo/Jumicon/Isoralook 等）、仅出现过一次的生僻色名——这些只是风格方向参考，除非用户输入资料（关键词或过往文案）明确给出，否则不要写进文案。');
-    sys.push('- 严禁照抄样例；标题之间、正文之间分别避免重复。同一产品特征可以换角度表达，但不得编造卖点凑数。样例仅供学习语气，不沿用标题加多行正文的成篇结构。');
+    sys.push('- 严禁照抄样例；' + n + ' 条之间标题、角度、卖点必须互不相同。');
     sys.push('- 【产品参数红线·最高优先级·违反即失败】文案里出现的任何【产品事实参数】都必须 100% 来自用户的关键词或过往文案，【用户没提到的，一个都不许自动生成/编造】。包括但不限于：① 产品真实色名/色号（必须与用户给定的产品色系一致；风格色盘里的色感词仅在【与用户给定色系相符】时可用于丰富表达，用户没给颜色时不得自定具体色名）② 直径（14.5mm）③ 价格（29r）④ 款式（定轴/非定轴）⑤ 高光（定位高光/不乱转）⑥ 抛型（半年抛/日抛）⑦ 着色 ⑧ 度数 ⑨ 任何可验证规格。宁可文案只剩氛围/情绪/赞美（阴湿/颓靡/显白/混血感/网感句式/emoji），也绝不杜撰。【样例里出现的具体产品参数 ≠ 你可以用；风格色盘的色感词仅在【与用户给定色系相符】时可用】。');
     sys.push('- 卖点要落到产品的【实际特征】（来自用户输入），不要只空喊赞美；但绝不为"落到产品"而编造用户没给的参数。');
     sys.push('- 该风格独有句式 + 人设/氛围/emoji 配色是拉开差异的关键，请主动用上；但【色系名必须与用户给定的产品色系相符】——风格色盘里的色感词只在【与用户色系一致】时用于丰富表达，用户没给颜色时不要自定具体色名。');
     sys.push('');
-    sys.push('# 独立素材的内容角度');
-    sys.push('标题突出不同情绪或画面；正文分别从用户提供的产品描述、场景、氛围、人设和感叹切入，每句表达完整，不出现“上述”“接着”“这也是”等对其他句子的依赖。');
+    sys.push('# 本次内容角度（每条只负责一个主角度，禁止换词复述）');
+    sys.push(creativeAngles(n, facts));
     sys.push('');
     sys.push('# 输出契约');
-    sys.push(materialContract(counts));
-    sys.push('正文要有具体画面和自然口语，避免把词库机械堆叠。');
+    sys.push('直接以「# 」开头输出；每条 = 1 行标题 + 3～5 行以「> 」开头的正文；条间用单独一行「---」分隔；无前言、编号、解释或代码块。');
+    sys.push('标题短促有网感，并与本条指定角度一致。正文要有具体画面和自然口语，避免把词库机械堆叠。');
     sys.push('产品卖点、参数、价格、促销均为【条件项】：用户输入资料明确表达过才可以写。机械抽取只辅助识别结构化字段，不能覆盖或否定过往文案中的定性描述。');
     sys.push('参考素材中的方括号内容只是安全占位符，最终文案严禁输出任何占位符。');
-    sys.push('必须恰好输出 ' + target + '，JSON 对象之后不要输出任何内容。');
+    sys.push('必须恰好输出 ' + n + ' 条，最后一条之后不要输出任何内容。');
 
     var user = [];
     user.push('# 本次输入模式');
@@ -325,16 +324,15 @@
     }
     user.push('# 任务');
     if (inputMode === 'past_only') {
-      user.push('仅根据上方同款过往文案提取产品信息，按所选风格重新创作 ' + target + '。必须直接生成，不得因为关键词为空而拒绝、解释或提问。');
+      user.push('仅根据上方同款过往文案提取产品信息，按所选风格重新创作 ' + n + ' 条文案。必须直接生成，不得因为关键词为空而拒绝、解释或提问。');
     } else if (inputMode === 'past_and_keywords') {
-      user.push('综合过往文案与本次关键词，按所选风格生成 ' + target + '；冲突信息以关键词为准。');
+      user.push('综合过往文案与本次关键词，按所选风格生成 ' + n + ' 条文案；冲突信息以关键词为准。');
       user.push('凡是关键词已经提供的字段，只能使用关键词里的最新值，不得再使用过往文案中的同类旧值。');
     } else {
-      user.push('按上述风格档生成 ' + target + '。');
+      user.push('按上述风格档生成 ' + n + ' 条文案。');
     }
-    user.push('标题和正文不需要强关联，不按索引对应；正文每行可独立选用。');
-    user.push('只写用户明确提供的产品事实，没有参数时照常使用定性描述、氛围创作。');
-    user.push(materialContract(counts));
+    user.push('每条标题、角度和卖点互不重复。');
+    user.push('【最后强调·最重要】只允许写用户在上面【明确提到】的产品参数；用户没提到的（价格/直径/定轴/高光/抛型/色系名/度数/着色……任何一个）都【不许自动生成】。拿不准有没有的，就不写。直接输出，第 1 条以 # 开头。');
 
     return {
       messages: [
@@ -342,56 +340,9 @@
         { role: 'user', content: user.join('\n') }
       ],
       facts: facts,
-      titleCount: counts.titleCount,
-      bodyCount: counts.bodyCount,
+      count: n,
       inputMode: inputMode
     };
-  }
-
-  function normalizeCounts(opts) {
-    opts = opts || {};
-    function limit(value, fallback, max) {
-      var n = parseInt(value, 10);
-      return Math.max(1, Math.min(max, isFinite(n) ? n : fallback));
-    }
-    return { titleCount: limit(opts.titleCount, 10, 30), bodyCount: limit(opts.bodyCount, 20, 50) };
-  }
-
-  function materialContract(counts) {
-    return '只输出一个 JSON 对象，结构为 {"titles":["独立标题"],"lines":["独立正文句子"]}。titles 恰好 ' +
-      counts.titleCount + ' 个字符串，lines 恰好 ' + counts.bodyCount +
-      ' 个字符串；每个字符串只含一行，不含编号或 Markdown 标记；不得输出嵌套文章、解释或代码块。';
-  }
-
-  function parseMaterials(raw) {
-    var text = String(raw || '').trim().replace(/^```(?:json|markdown)?\s*\n?/i, '').replace(/\n?```$/, '').trim();
-    var out = { titles: [], lines: [] };
-    function clean(items) {
-      if (!Array.isArray(items)) return [];
-      return uniq(items.filter(function (x) { return typeof x === 'string'; }).map(function (x) {
-        return x.replace(/\s*\n\s*/g, ' ').replace(/^\s*(?:#{1,6}\s+|>\s*|[-*]\s+|\d+[、)]\s*|\d+\.(?!\d)\s*)/, '').trim();
-      }));
-    }
-    try {
-      var data = JSON.parse(text);
-      if (data && typeof data === 'object') return { titles: clean(data.titles), lines: clean(data.lines) };
-    } catch (e) {}
-    // 只接受明确的双分区文本；拒绝把错误说明或成篇文案猜成素材。
-    var section = '';
-    text.split(/\r?\n/).forEach(function (line) {
-      var heading = line.trim().replace(/^#{1,6}\s*/, '').replace(/[:：]$/, '');
-      if (/^(?:标题|titles)(?:\s*[（(]\d+\s*条?[）)])?$/i.test(heading)) { section = 'titles'; return; }
-      if (/^(?:正文|文案|lines)(?:\s*[（(]\d+\s*条?[）)])?$/i.test(heading)) { section = 'lines'; return; }
-      if (section && /^\s*(?:[-*]\s+|>\s*|\d+[.、)]\s*)\S/.test(line)) out[section].push(line);
-    });
-    return { titles: clean(out.titles), lines: clean(out.lines) };
-  }
-
-  function validateMaterials(parts, counts) {
-    var issues = [];
-    if (parts.titles.length !== counts.titleCount) issues.push('标题应为 ' + counts.titleCount + ' 条，实际 ' + parts.titles.length + ' 条');
-    if (parts.lines.length !== counts.bodyCount) issues.push('正文应为 ' + counts.bodyCount + ' 条，实际 ' + parts.lines.length + ' 条');
-    return issues;
   }
 
   function parseCopies(text) {
@@ -483,9 +434,9 @@
         content: [
           '你是纯文本格式整理器，不是文案写手。',
           '只整理现有内容的 Markdown 结构，禁止润色、改写、补充、删除产品事实，禁止新增价格、颜色、参数、促销或卖点。',
-          materialContract(expectedCount),
-          '将标题提取到 titles，将独立正文句子提取到 lines。数量不足时保留已有内容，不得编造新文案凑数。',
-          '无前言、编号、解释或代码块；第一个字符必须是 {。'
+          '目标格式：恰好 ' + expectedCount + ' 条；每条一行「# 标题」和3～5行「> 正文」；条间用单独一行「---」分隔。',
+          '可以把错误合并的正文拆行，或把同一条内过多的短行合并，但必须保持原意和原有事实不变。',
+          '无前言、编号、解释或代码块；第一个字符必须是 #。'
         ].join('\n')
       },
       {
@@ -514,8 +465,8 @@
       content: [
         '【空响应恢复审查】上一次调用没有返回可见正文（finish_reason：' + finishReason + '）。',
         '请重新检查并完整执行上面的原始文案任务，不要解释空响应原因。',
-        materialContract(expectedCount),
-        '不要输出前言、分析、拒绝说明、代码块或任何格式外文字；第一个字符必须是 {。'
+        '必须直接输出恰好 ' + expectedCount + ' 条最终 Markdown 文案：每条以「# 标题」开始，正文每行以「> 」开始，条目之间用单独一行「---」分隔。',
+        '不要输出前言、分析、拒绝说明、代码块或任何格式外文字；第一个字符必须是 #。'
       ].join('\n')
     });
     return messages;
@@ -523,9 +474,6 @@
 
   window.PromptEngine = {
     buildPrompt: buildPrompt,
-    normalizeCounts: normalizeCounts,
-    parseMaterials: parseMaterials,
-    validateMaterials: validateMaterials,
     parseCopies: parseCopies,
     extractProductFacts: extractProductFacts,
     validateCopies: validateCopies,

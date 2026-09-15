@@ -1,46 +1,93 @@
 var assert = require('assert');
-var harness = require('./app-harness');
-var parts = { titles: ['标题一', '标题二'], lines: ['正文一', '正文二', '正文三'] };
+var fs = require('fs');
+var path = require('path');
+var vm = require('vm');
+
+function element(id, events) {
+  return {
+    id: id,
+    value: '',
+    textContent: '',
+    innerHTML: '',
+    disabled: false,
+    style: {},
+    options: [],
+    addEventListener: function () {},
+    querySelectorAll: function () { return []; },
+    appendChild: function () { if (id === 'results') events.push('render'); },
+    classList: { add: function () {}, remove: function () {} }
+  };
+}
+
 async function run() {
-  var app = harness([harness.response(parts)]);
-  await app.generate();
-  assert.deepStrictEqual(app.requests[0].thinking, { type: 'disabled' });
-  assert.strictEqual(app.requests.length, 1);
-  assert.strictEqual(app.inputs('titles').length, 2);
-  assert.strictEqual(app.inputs('lines').length, 3);
-  assert.ok(app.events.indexOf('render') < app.events.indexOf('expand'));
-  assert.ok(app.ids.copySelectionBtn.disabled);
-  app.choose('titles', 0); app.choose('titles', 1);
-  app.choose('lines', 2); app.choose('lines', 0);
-  assert.strictEqual(app.ids.compositionPreview.textContent, '标题二\n\n正文三\n正文一');
-  assert.strictEqual(app.feedback.length, 0, '勾选不计复制');
-  app.choose('lines', 2, false); app.choose('lines', 2);
-  assert.strictEqual(app.ids.compositionPreview.textContent, '标题二\n\n正文一\n正文三');
-  app.radios[1].checked = true; app.radios[1].handlers.change();
-  await app.ids.copySelectionBtn.onclick();
-  assert.deepStrictEqual(app.clipboard, ['标题二\n\n正文一\n正文三']);
-  assert.strictEqual(app.feedback[0].style, 'ssorcon', '切换风格不改变当前批次的反馈归属');
-  assert.strictEqual(app.feedback[0].parts.lines.length, 2);
-  app.context.navigator.clipboard.writeText = async function () { throw new Error('denied'); };
-  await app.ids.copySelectionBtn.onclick();
-  assert.strictEqual(app.feedback.length, 1, '复制失败不能加分');
-  app.ids.clearSelectionBtn.onclick();
-  assert.ok(app.ids.copySelectionBtn.disabled);
+  var events = [];
+  var ids = {};
+  [
+    'results', 'baseUrl', 'apiKey', 'model', 'count', 'temperature', 'tempVal',
+    'resultsHead', 'resultsTitle', 'copyAllBtn', 'genBtn', 'pastCopies', 'keywords',
+    'libPanel', 'libRefresh', 'libReset', 'libCat', 'libOnlyCand'
+  ].forEach(function (id) { ids[id] = element(id, events); });
+  ids.baseUrl.value = 'https://example.test/v1';
+  ids.apiKey.value = 'test-key';
+  ids.model.value = 'deepseek-v4-flash';
+  ids.count.value = '1';
+  ids.temperature.value = '0.95';
 
-  var malformed = harness([
-    { choices: [{ message: { content: '不是文案格式' } }] },
-    harness.response(parts)
-  ]);
-  await malformed.generate();
-  assert.strictEqual(malformed.requests.length, 2);
-  assert.strictEqual(malformed.inputs('titles').length, 2);
-  assert.ok(malformed.requests[1].messages[0].content.indexOf('titles 恰好 2') !== -1);
+  var context = {
+    console: console,
+    AbortController: AbortController,
+    setTimeout: setTimeout,
+    clearTimeout: clearTimeout,
+    localStorage: {
+      getItem: function (key) {
+        return { baseUrl: 'https://example.test/v1', apiKey: 'test-key', model: 'deepseek-v4-flash', count: '1', temperature: '0.95' }[key] || null;
+      },
+      setItem: function () {}
+    },
+    document: {
+      getElementById: function (id) { return ids[id] || null; },
+      querySelectorAll: function () { return []; },
+      createElement: function () { return element('card', events); },
+      body: { appendChild: function () {}, removeChild: function () {} }
+    },
+    fetch: async function (url, options) {
+      events.push('main-request');
+      var body = JSON.parse(options.body);
+      assert.deepStrictEqual(body.thinking, { type: 'disabled' }, 'DeepSeek V4 应显式关闭 thinking');
+      return {
+        ok: true,
+        json: async function () { return { choices: [{ message: { content: '# 标题\n> 一\n> 二\n> 三' } }] }; }
+      };
+    }
+  };
+  context.window = context;
+  context.PromptEngine = {
+    STYLES: { ssorcon: {} },
+    buildPrompt: function () { return { messages: [], facts: {}, count: 1 }; },
+    parseCopies: function () { return [{ title: '标题', lines: ['一', '二', '三'] }]; },
+    validateCopies: function () { return ['第 1 条出现未授权价格：29r']; },
+    classifyIssues: function () { return { format: [], safety: ['第 1 条出现未授权价格：29r'], quality: [] }; },
+    buildFormatRepairMessages: function () { return []; }
+  };
+  context.EVOLVE = {
+    bumpEpoch: function () {},
+    expand: function () { events.push('expand'); }
+  };
 
-  var partial = harness([harness.response({ titles: ['已有标题'], lines: ['已有正文'] })]);
-  await partial.generate();
-  assert.strictEqual(partial.requests.length, 2);
-  assert.ok(partial.ids.generationStatus.textContent.indexOf('已保留可用素材') !== -1);
-  assert.strictEqual(partial.inputs('lines').length, 1);
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.resolve(__dirname, '..', 'app.js'), 'utf8'), context, { filename: 'app.js' });
+  await ids.genBtn.onclick();
+  await new Promise(function (resolve) { setTimeout(resolve, 10); });
+
+  assert.ok(events.indexOf('main-request') !== -1);
+  assert.ok(events.indexOf('render') !== -1);
+  assert.ok(ids.results.innerHTML.indexOf('已阻止展示') === -1, '参数提示不应再阻止结果展示');
+  assert.ok(events.indexOf('expand') !== -1);
+  assert.ok(events.indexOf('render') < events.indexOf('expand'), '扩库必须在结果渲染之后启动');
   console.log('app flow tests passed');
 }
-run().catch(function (e) { console.error(e); process.exitCode = 1; });
+
+run().catch(function (e) {
+  console.error(e);
+  process.exitCode = 1;
+});

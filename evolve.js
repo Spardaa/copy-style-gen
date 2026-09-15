@@ -69,19 +69,14 @@
     if (shape === 'titlelines') return (p && p.title) ? p.title : '';
     return '';
   }
-  // 归因用：词句至少 3 字，谐音至少 2 字；样例按标题/正文分开匹配。
-  function matchKeys(it, shape, kind) {
+  // 归因用：返回该项"会出现在生成文案里"的候选子串（短于 3 字的跳过，谐音/样例不参与归因）
+  function matchKeys(it, shape) {
     var p = it.payload, out = [];
     if (shape === 'string') {
       if (typeof p === 'string' && p.length >= 3) out.push(p);
     } else if (shape === 'tplex') {
       if (p && p.tpl) { var t = String(p.tpl).replace(/[XＸ\[\]【】]/g, ''); if (t.length >= 3) out.push(t); }
       if (p && p.ex && String(p.ex).length >= 3) out.push(String(p.ex));
-    } else if (shape === 'wm') {
-      if (p && p.w && String(p.w).length >= 2) out.push(String(p.w));
-    } else if (shape === 'titlelines') {
-      if (kind !== 'lines' && p && p.title) out.push(String(p.title));
-      if (kind !== 'titles' && p && p.lines) out = out.concat(p.lines.filter(function (line) { return String(line).length >= 3; }));
     }
     return out;
   }
@@ -194,57 +189,19 @@
     save();
   }
 
-  // ---- 来源快照与分区反馈；扩库在结果渲染后触发 ----
-  function captureExposure(promptText) {
-    return epochShown.map(function (e) {
-      return { catKey: e.catKey, item: e.item, shape: e.shape, promptText: String(promptText || '') };
-    });
-  }
-
-  function feedbackEntries(styleKey, snapshot) {
-    var d = load();
-    var seen = {};
-    return (snapshot || epochShown).filter(function (e) {
-      if (styleKey && e.catKey.indexOf('common.') !== 0 && e.catKey.indexOf('style.' + styleKey + '.') !== 0) return false;
-      // 用对象身份防止库重置、删除后把旧结果反馈到同 ID 的新种子上。
-      if ((d.items[e.catKey] || []).indexOf(e.item) === -1 || seen[e.item.id]) return false;
-      seen[e.item.id] = true;
-      return true;
-    });
-  }
-
-  function matchesPart(e, texts, kind) {
-    return matchKeys(e.item, e.shape, kind).some(function (key) {
-      if (e.promptText != null && e.promptText.indexOf(key) === -1) return false;
-      return (texts || []).some(function (text) { return String(text).indexOf(key) !== -1; });
-    });
-  }
-
-  function recordUsed(parts, styleKey, snapshot) {
-    feedbackEntries(styleKey, snapshot).forEach(function (e) {
-      if (matchesPart(e, parts.titles, 'titles')) e.item.usedTitle = (e.item.usedTitle || 0) + 1;
-      if (matchesPart(e, parts.lines, 'lines')) e.item.usedBody = (e.item.usedBody || 0) + 1;
-    });
-    save();
-  }
-
-  function recordCopy(text, styleKey, snapshot, parts) {
+  // ---- 复制归因：命中的暴露项 copy++，再 curate（扩库已移至 generate() 时触发）----
+  function recordCopy(text, styleKey) {
     if (!text) return;
     var d = load();
-    parts = parts || { titles: [], lines: [String(text)] };
-    feedbackEntries(styleKey, snapshot).forEach(function (e) {
-      var titleHit = matchesPart(e, parts.titles, 'titles');
-      var bodyHit = matchesPart(e, parts.lines, 'lines');
-      if (!titleHit && !bodyHit) return;
-      // 一次组合复制对同一词项总分只加一次，分区计数供查看。
-      e.item.copy = (e.item.copy || 0) + 1;
-      if (titleHit) e.item.copyTitle = (e.item.copyTitle || 0) + 1;
-      if (bodyHit) e.item.copyBody = (e.item.copyBody || 0) + 1;
-      e.item.dislike = 0;
-      var banIndex = d.blacklist.indexOf(sigOf(e.item, e.shape));
-      if (banIndex !== -1) d.blacklist.splice(banIndex, 1);
+    var t = String(text), hit = false;
+    epochShown.forEach(function (e) {
+      var keys = matchKeys(e.item, e.shape);
+      for (var i = 0; i < keys.length; i++) {
+        // 命中即 copy++；正反馈同时【清空 dislike】——被复制=救赎，撤销之前的👎降权
+        if (t.indexOf(keys[i]) !== -1) { e.item.copy = (e.item.copy || 0) + 1; e.item.dislike = 0; hit = true; break; }
+      }
     });
-    save();
+    if (hit) save();
     curate();
   }
 
@@ -280,23 +237,23 @@
   }
 
   // ---- 👎 降权（非立即拉黑）：只对【最长匹配】的那条 dislike++；累计达 DISLIKE_BAN 才进黑名单 ----
-  function banCard(text, styleKey, snapshot, kind) {
+  function banCard(text) {
     if (!text) return;
     var d = load();
     var t = String(text);
     // 取命中里匹配键最长（最具体）的一条，避免一次👎波及一堆词
     var best = null;
-    feedbackEntries(styleKey, snapshot).forEach(function (e) {
-      var keys = matchKeys(e.item, e.shape, kind);
+    epochShown.forEach(function (e) {
+      var keys = matchKeys(e.item, e.shape);
       for (var i = 0; i < keys.length; i++) {
-        if (t.indexOf(keys[i]) !== -1 && (e.promptText == null || e.promptText.indexOf(keys[i]) !== -1)) {
+        if (t.indexOf(keys[i]) !== -1) {
           if (!best || keys[i].length > best.key.length) {
             best = { item: e.item, key: keys[i], sig: sigOf(e.item, e.shape) };
           }
         }
       }
     });
-    if (!best) { save(); return false; }
+    if (!best) { save(); return; }
     best.item.dislike = (best.item.dislike || 0) + 1;
     // 单次只降权；同一词累计👎达阈值才拉黑（候选拉黑即淘汰，seed/active 仅屏蔽抽样）
     if (best.item.dislike >= DISLIKE_BAN && best.sig) {
@@ -309,7 +266,6 @@
       }
     }
     save();
-    return true;
   }
 
   // ---- 红线安全网：拒绝含产品参数的候选 ----
@@ -442,10 +398,6 @@
           tier: it.tier,
           shown: it.shown || 0,
           copy: it.copy || 0,
-          usedTitle: it.usedTitle || 0,
-          usedBody: it.usedBody || 0,
-          copyTitle: it.copyTitle || 0,
-          copyBody: it.copyBody || 0,
           dislike: it.dislike || 0,
           weight: Math.round(weight(it, d.epoch) * 100) / 100,
           banned: isBanned(it, shape)
@@ -489,8 +441,6 @@
     bumpEpoch: bumpEpoch,
     sample: sample,
     recordCopy: recordCopy,
-    captureExposure: captureExposure,
-    recordUsed: recordUsed,
     banCard: banCard,
     expand: expand,
     curate: curate,
