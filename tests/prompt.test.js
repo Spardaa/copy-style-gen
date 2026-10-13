@@ -8,7 +8,7 @@ var context = { window: {}, console: console };
 context.window = context;
 vm.createContext(context);
 
-['styles/common.js', 'styles/ssorcon.js', 'styles/sakura_blue.js', 'styles/sakura_red.js', 'prompt.js'].forEach(function (file) {
+['styles/common.js', 'styles/sakura_blue.js', 'styles/sakura_red.js', 'prompt.js'].forEach(function (file) {
   vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context, { filename: file });
 });
 
@@ -25,14 +25,14 @@ assert.strictEqual(noColor.hasColor, false, '“显白”不应被误判为用�
 var atmosphereOnly = engine.extractProductFacts('', '奶凶暗黑感 氛围很绝');
 assert.strictEqual(atmosphereOnly.hasColor, false, '氛围词不应被误判为具体产品颜色');
 
-var built = engine.buildPrompt({ style: 'ssorcon', count: 99, keywords: '翡翠绿 29r' });
+var built = engine.buildPrompt({ style: 'sakura_blue', count: 99, keywords: '翡翠绿 29r' });
 assert.strictEqual(built.count, 10, '生成数量必须限制到 1～10');
 assert.strictEqual(built.inputMode, 'keywords_only');
 assert.ok(built.messages[0].content.indexOf('每条只负责一个主角度') !== -1);
 assert.ok(built.messages[1].content.indexOf('直径：【未提供，禁止提及】') === -1, '未识别字段不应再以禁止项逐条列出');
 
 var pastOnly = engine.buildPrompt({
-  style: 'ssorcon',
+  style: 'sakura_blue',
   count: 5,
   pastCopies: '# 翡翠绿太绝了\n> 14.5mm 半年抛\n> 29r最后一批',
   keywords: '   '

@@ -7,8 +7,8 @@
 (function () {
   'use strict';
 
-  var STORAGE_KEY = 'evolve_lib_v1';
-  var VERSION = 1;
+  var STORAGE_KEY = 'evolve_lib_v2';
+  var VERSION = 2;
   var CAP_NEW = 40;            // 每类非种子条目软上限（超限先淘汰权重最低的 active，seed 永不淘汰）
   var EXPAND_COOLDOWN_MS = 60000; // 扩库节流，避免连续触发狂打 API
   var EXPAND_COUNT = 8;        // 每次扩库让 LLM 生成的新候选条数

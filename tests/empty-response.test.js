@@ -59,7 +59,7 @@ async function scenario(responses) {
   };
   context.window = context;
   context.PromptEngine = {
-    STYLES: { ssorcon: {} },
+    STYLES: { sakura_blue: {} },
     buildPrompt: function () { return { messages: [{ role: 'user', content: '原任务' }], facts: {}, count: 1 }; },
     buildEmptyRecoveryMessages: function (messages) {
       events.push('recovery');

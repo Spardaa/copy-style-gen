@@ -62,7 +62,7 @@ async function run() {
   };
   context.window = context;
   context.PromptEngine = {
-    STYLES: { ssorcon: {} },
+    STYLES: { sakura_blue: {} },
     buildPrompt: function () { return { messages: [], facts: {}, count: 1 }; },
     parseCopies: function () { return [{ title: '标题', lines: ['一', '二', '三'] }]; },
     validateCopies: function () { return ['第 1 条出现未授权价格：29r']; },

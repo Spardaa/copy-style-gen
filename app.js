@@ -25,7 +25,7 @@
   };
 
   // intensity 已从 UI 移除，固定为标准档
-  var state = { style: 'ssorcon' };
+  var state = { style: 'sakura_blue' };
 
   function readCount() {
     var el = $('count');
@@ -65,8 +65,8 @@
     $('baseUrl').value = LS.get('baseUrl', '');
     $('apiKey').value = LS.get('apiKey', '');
     $('model').value = LS.get('model', 'deepseek-chat');
-    var saved = LS.get('style', 'ssorcon');
-    state.style = VALID_STYLES.indexOf(saved) !== -1 ? saved : 'ssorcon';
+    var saved = LS.get('style', 'sakura_blue');
+    state.style = VALID_STYLES.indexOf(saved) !== -1 ? saved : 'sakura_blue';
     $('count').value = LS.get('count', '5');
     var tempInput = $('temperature');
     if (tempInput) {

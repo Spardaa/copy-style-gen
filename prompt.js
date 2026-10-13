@@ -208,8 +208,8 @@
     opts = opts || {};
     var STYLES = window.STYLES || {};
     var COMMON = window.COMMON || {};
-    var styleKey = opts.style || 'ssorcon';
-    var s = STYLES[styleKey] || STYLES.ssorcon || {};
+    var styleKey = opts.style || 'sakura_blue';
+    var s = STYLES[styleKey] || STYLES.sakura_blue || {};
     var n = Math.max(1, Math.min(10, parseInt(opts.count, 10) || 1));
     var pastText = opts.pastCopies && String(opts.pastCopies).trim() ? String(opts.pastCopies).trim() : '';
     var keywordText = opts.keywords && String(opts.keywords).trim() ? String(opts.keywords).trim() : '';
@@ -228,7 +228,7 @@
     sys.push(sanitizeReference(COMMON.structureRule || '', facts));
     sys.push(sanitizeReference(COMMON.punctuationRule || '', facts));
     sys.push('');
-    sys.push('# 通用高频句式（三风格共用，自由穿插）');
+    sys.push('# 通用高频句式（全风格共用，自由穿插）');
     sys.push(joinArr(sanitizeStrings(pick('common.sharedFormulas', COMMON.sharedFormulas, 10), facts)));
     sys.push('通用网感词：' + joinArr(sanitizeStrings(pick('common.sharedVocab', COMMON.sharedVocab, 14), facts)));
     sys.push('emoji 通则：' + sanitizeReference(COMMON.emojiRule || '', facts));
@@ -271,7 +271,7 @@
     sys.push(fewShotsBlock((shotSample || []).map(sanitizeFewShot)) || '（无）');
     sys.push('');
     sys.push('# 禁忌（重要）');
-    sys.push('- 严禁输出具体的二次元角色名（林克/雏田/小舞/知更鸟/温迪等）、品牌或系列专有名（piggyoo/Jumicon/Isoralook 等）、仅出现过一次的生僻色名——这些只是风格方向参考，除非用户输入资料（关键词或过往文案）明确给出，否则不要写进文案。');
+    sys.push('- 严禁输出具体的二次元角色名（袁基/代号鸢/林克/雏田/小舞/温迪/ivan 等）、品牌或系列专有名（Serltyca/Ninamond/piggyoo/Jumicon/Isoralook 等）、仅出现过一次的生僻色名——这些只是风格方向参考，除非用户输入资料（关键词或过往文案）明确给出，否则不要写进文案。');
     sys.push('- 严禁照抄样例；' + n + ' 条之间标题、角度、卖点必须互不相同。');
     sys.push('- 【产品参数红线·最高优先级·违反即失败】文案里出现的任何【产品事实参数】都必须 100% 来自用户的关键词或过往文案，【用户没提到的，一个都不许自动生成/编造】。包括但不限于：① 产品真实色名/色号（必须与用户给定的产品色系一致；风格色盘里的色感词仅在【与用户给定色系相符】时可用于丰富表达，用户没给颜色时不得自定具体色名）② 直径（14.5mm）③ 价格（29r）④ 款式（定轴/非定轴）⑤ 高光（定位高光/不乱转）⑥ 抛型（半年抛/日抛）⑦ 着色 ⑧ 度数 ⑨ 任何可验证规格。宁可文案只剩氛围/情绪/赞美（阴湿/颓靡/显白/混血感/网感句式/emoji），也绝不杜撰。【样例里出现的具体产品参数 ≠ 你可以用；风格色盘的色感词仅在【与用户给定色系相符】时可用】。');
     sys.push('- 卖点要落到产品的【实际特征】（来自用户输入），不要只空喊赞美；但绝不为"落到产品"而编造用户没给的参数。');
